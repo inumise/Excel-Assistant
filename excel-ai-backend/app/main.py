@@ -14,6 +14,13 @@ import shutil
 import speech_recognition as sr
 from pydub import AudioSegment
 import io
+import httpx
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
+
+from app.ai_agent import ExcelAIAgent
 
 app = FastAPI()
 
@@ -871,3 +878,181 @@ async def process_voice_command(spreadsheet_id: str, file: UploadFile = File(...
         "action": result.action,
         "data": result.data
     }
+
+
+# AI Agent instances per spreadsheet
+ai_agents: Dict[str, ExcelAIAgent] = {}
+
+# Web search function using DuckDuckGo
+async def web_search(query: str) -> List[Dict[str, str]]:
+    """Search the web using DuckDuckGo."""
+    try:
+        async with httpx.AsyncClient() as client:
+            # Use DuckDuckGo instant answer API
+            response = await client.get(
+                "https://api.duckduckgo.com/",
+                params={
+                    "q": query,
+                    "format": "json",
+                    "no_html": 1,
+                    "skip_disambig": 1
+                },
+                timeout=10.0
+            )
+            data = response.json()
+            
+            results = []
+            
+            # Get abstract if available
+            if data.get("Abstract"):
+                results.append({
+                    "title": data.get("Heading", "Result"),
+                    "snippet": data["Abstract"],
+                    "source": data.get("AbstractSource", "DuckDuckGo")
+                })
+            
+            # Get related topics
+            for topic in data.get("RelatedTopics", [])[:5]:
+                if isinstance(topic, dict) and topic.get("Text"):
+                    results.append({
+                        "title": topic.get("FirstURL", "").split("/")[-1].replace("_", " "),
+                        "snippet": topic["Text"],
+                        "source": "DuckDuckGo"
+                    })
+            
+            # If no results, try a simple search
+            if not results:
+                results.append({
+                    "title": "Search",
+                    "snippet": f"No direct results found for '{query}'. Try rephrasing your search.",
+                    "source": "DuckDuckGo"
+                })
+            
+            return results
+    except Exception as e:
+        return [{"title": "Error", "snippet": f"Search failed: {str(e)}", "source": "Error"}]
+
+
+class AICommandRequest(BaseModel):
+    command: str
+
+
+@app.post("/api/spreadsheet/{spreadsheet_id}/ai-command")
+async def process_ai_command(spreadsheet_id: str, request: AICommandRequest):
+    """Process a command using the AI agent with Claude."""
+    if spreadsheet_id not in spreadsheets:
+        raise HTTPException(status_code=404, detail="Spreadsheet not found")
+    
+    # Get or create AI agent for this spreadsheet
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        return {
+            "success": False,
+            "message": "AI features require an Anthropic API key. Please configure ANTHROPIC_API_KEY.",
+            "data": None
+        }
+    
+    if spreadsheet_id not in ai_agents:
+        try:
+            ai_agents[spreadsheet_id] = ExcelAIAgent(api_key=api_key)
+        except Exception as e:
+            return {
+                "success": False,
+                "message": f"Failed to initialize AI agent: {str(e)}",
+                "data": None
+            }
+    
+    agent = ai_agents[spreadsheet_id]
+    spreadsheet = spreadsheets[spreadsheet_id]
+    
+    # Load workbook
+    try:
+        workbook = openpyxl.load_workbook(spreadsheet["file_path"])
+    except Exception as e:
+        return {
+            "success": False,
+            "message": f"Failed to load spreadsheet: {str(e)}",
+            "data": None
+        }
+    
+    # Process command with AI
+    try:
+        result = agent.process_command(
+            command=request.command,
+            workbook=workbook,
+            active_sheet_name=spreadsheet["active_sheet"],
+            web_search_func=lambda q: __import__('asyncio').get_event_loop().run_until_complete(web_search(q))
+        )
+    except Exception as e:
+        return {
+            "success": False,
+            "message": f"AI processing error: {str(e)}",
+            "data": None
+        }
+    
+    # Save workbook if any actions were taken
+    if result.get("actions"):
+        try:
+            save_workbook(spreadsheet_id, workbook)
+        except Exception as e:
+            return {
+                "success": False,
+                "message": f"Failed to save changes: {str(e)}",
+                "data": None
+            }
+    
+    # Get updated spreadsheet data
+    try:
+        workbook = openpyxl.load_workbook(spreadsheet["file_path"])
+        spreadsheet_data = get_spreadsheet_data(workbook)
+    except Exception as e:
+        spreadsheet_data = None
+    
+    return {
+        "success": result.get("success", False),
+        "message": result.get("message", ""),
+        "actions": result.get("actions", []),
+        "data": {
+            "spreadsheet": spreadsheet_data
+        } if spreadsheet_data else None
+    }
+
+
+@app.post("/api/spreadsheet/{spreadsheet_id}/ai-voice-command")
+async def process_ai_voice_command(spreadsheet_id: str, file: UploadFile = File(...)):
+    """Transcribe audio and process with AI agent."""
+    if spreadsheet_id not in spreadsheets:
+        raise HTTPException(status_code=404, detail="Spreadsheet not found")
+    
+    # First transcribe the audio
+    transcribe_result = await transcribe_audio(file)
+    
+    if not transcribe_result["success"]:
+        return {
+            "success": False,
+            "message": transcribe_result["error"],
+            "transcript": None,
+            "data": None
+        }
+    
+    transcript = transcribe_result["transcript"]
+    
+    # Process with AI agent
+    ai_request = AICommandRequest(command=transcript)
+    result = await process_ai_command(spreadsheet_id, ai_request)
+    
+    return {
+        "success": result["success"],
+        "message": result["message"],
+        "transcript": transcript,
+        "actions": result.get("actions", []),
+        "data": result.get("data")
+    }
+
+
+@app.delete("/api/spreadsheet/{spreadsheet_id}/ai-history")
+async def clear_ai_history(spreadsheet_id: str):
+    """Clear the AI conversation history for a spreadsheet."""
+    if spreadsheet_id in ai_agents:
+        ai_agents[spreadsheet_id].clear_history()
+    return {"success": True, "message": "AI conversation history cleared"}

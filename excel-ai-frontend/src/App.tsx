@@ -113,8 +113,9 @@ function App() {
   const [voiceFeedback, setVoiceFeedback] = useState(false)
   const [chatInput, setChatInput] = useState('')
   const [activeView, setActiveView] = useState<'spreadsheet' | 'chat'>('chat')
-    const [audioLevel, setAudioLevel] = useState(0)
-    const [voiceStatus, setVoiceStatus] = useState<string>('')
+  const [audioLevel, setAudioLevel] = useState(0)
+  const [voiceStatus, setVoiceStatus] = useState<string>('')
+  const [useAI] = useState(true) // Use AI by default - always on
   
   const recognitionRef = useRef<ISpeechRecognition | null>(null)
   const messageIdRef = useRef(0)
@@ -259,10 +260,15 @@ function App() {
     setIsLoading(true)
 
     try {
-      const response = await fetch(`${API_URL}/api/spreadsheet/${spreadsheetId}/command`, {
+      // Use AI endpoint if AI mode is enabled
+      const endpoint = useAI 
+        ? `${API_URL}/api/spreadsheet/${spreadsheetId}/ai-command`
+        : `${API_URL}/api/spreadsheet/${spreadsheetId}/command`
+      
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ spreadsheet_id: spreadsheetId, command })
+        body: JSON.stringify(useAI ? { command } : { spreadsheet_id: spreadsheetId, command })
       })
 
       const result = await response.json()
@@ -420,40 +426,45 @@ function App() {
           }
         }
 
-      const handleAudioUpload = async (file: File) => {
-        if (!spreadsheetId) return
-    
-        setIsLoading(true)
-        addChatMessage('user', `[Voice memo: ${file.name}]`)
-    
-        try {
-          const formData = new FormData()
-          formData.append('file', file)
+  const handleAudioUpload = async (file: File) => {
+    if (!spreadsheetId) return
+
+    setIsLoading(true)
+    addChatMessage('user', `[Voice memo: ${file.name}]`)
+
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
       
-          const response = await fetch(`${API_URL}/api/spreadsheet/${spreadsheetId}/voice-command`, {
-            method: 'POST',
-            body: formData
-          })
-      
-          const result = await response.json()
-      
-          if (result.success) {
-            addChatMessage('assistant', `Heard: "${result.transcript}"\n\n${result.message}`)
-            if (result.data?.spreadsheet) {
-              setSpreadsheetData(result.data.spreadsheet)
-            }
-            if (voiceFeedback) {
-              speak(result.message)
-            }
-          } else {
-            addChatMessage('assistant', result.message || 'Failed to process voice command', false)
-          }
-        } catch (err) {
-          addChatMessage('assistant', 'Failed to upload audio. Please try again.', false)
-        } finally {
-          setIsLoading(false)
+      // Use AI endpoint if AI mode is enabled
+      const endpoint = useAI 
+        ? `${API_URL}/api/spreadsheet/${spreadsheetId}/ai-voice-command`
+        : `${API_URL}/api/spreadsheet/${spreadsheetId}/voice-command`
+  
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        body: formData
+      })
+  
+      const result = await response.json()
+  
+      if (result.success) {
+        addChatMessage('assistant', `Heard: "${result.transcript}"\n\n${result.message}`)
+        if (result.data?.spreadsheet) {
+          setSpreadsheetData(result.data.spreadsheet)
         }
+        if (voiceFeedback) {
+          speak(result.message)
+        }
+      } else {
+        addChatMessage('assistant', result.message || 'Failed to process voice command', false)
       }
+    } catch (err) {
+      addChatMessage('assistant', 'Failed to upload audio. Please try again.', false)
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
         const renderSpreadsheet = () => {
     const currentSheet = spreadsheetData[activeSheet]
@@ -759,6 +770,12 @@ function App() {
         </div>
         
         <div className="flex items-center gap-1 md:gap-2">
+          <div className="flex items-center gap-2 mr-2">
+            <div className="flex items-center gap-1.5 px-2 py-1 bg-gradient-to-r from-purple-500 to-indigo-500 rounded-full">
+              <Sparkles className="w-3 h-3 text-white" />
+              <span className="text-xs font-medium text-white">AI</span>
+            </div>
+          </div>
           <div className="hidden md:flex items-center gap-2 mr-2">
             <Switch
               id="voice-feedback"
