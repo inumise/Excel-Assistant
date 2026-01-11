@@ -1,6 +1,7 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from typing import Optional, Dict, Any, List
 import openpyxl
@@ -1056,3 +1057,30 @@ async def clear_ai_history(spreadsheet_id: str):
     if spreadsheet_id in ai_agents:
         ai_agents[spreadsheet_id].clear_history()
     return {"success": True, "message": "AI conversation history cleared"}
+
+# Serve frontend static files
+STATIC_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "static")
+
+# Check if static directory exists (for combined deployment)
+if os.path.exists(STATIC_DIR):
+    # Mount static assets (JS, CSS, etc.)
+    app.mount("/assets", StaticFiles(directory=os.path.join(STATIC_DIR, "assets")), name="assets")
+    
+    # Serve index.html for the root and any non-API routes (SPA support)
+    @app.get("/", response_class=HTMLResponse)
+    async def serve_frontend():
+        index_path = os.path.join(STATIC_DIR, "index.html")
+        with open(index_path, "r") as f:
+            return f.read()
+    
+    # Catch-all route for SPA - must be last
+    @app.get("/{full_path:path}", response_class=HTMLResponse)
+    async def serve_spa(full_path: str):
+        # Don't serve frontend for API routes
+        if full_path.startswith("api/"):
+            raise HTTPException(status_code=404, detail="Not found")
+        index_path = os.path.join(STATIC_DIR, "index.html")
+        if os.path.exists(index_path):
+            with open(index_path, "r") as f:
+                return f.read()
+        raise HTTPException(status_code=404, detail="Not found")
