@@ -1,16 +1,12 @@
 import Anthropic from '@anthropic-ai/sdk'
-import ExcelJS from 'exceljs'
+import { SpreadsheetState, setCell, setCellStyle, addSheet, getCell } from './excel-store'
 
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY || ''
-})
+// Note: Conversation history is passed from client for stateless operation on Vercel
 
 interface ConversationMessage {
   role: 'user' | 'assistant'
   content: string
 }
-
-const conversationHistory = new Map<string, ConversationMessage[]>()
 
 const tools: Anthropic.Tool[] = [
   {
@@ -62,14 +58,6 @@ const tools: Anthropic.Tool[] = [
         italic: {
           type: "boolean",
           description: "Make text italic"
-        },
-        color: {
-          type: "string",
-          description: "Text color in hex format (e.g., 'FF0000' for red)"
-        },
-        backgroundColor: {
-          type: "string",
-          description: "Background color in hex format"
         }
       },
       required: ["cell"]
@@ -88,36 +76,8 @@ const tools: Anthropic.Tool[] = [
       },
       required: ["name"]
     }
-  },
-  {
-    name: "web_search",
-    description: "Search the web for information. Use this when you need to look up data, facts, or current information.",
-    input_schema: {
-      type: "object" as const,
-      properties: {
-        query: {
-          type: "string",
-          description: "The search query"
-        }
-      },
-      required: ["query"]
-    }
   }
 ]
-
-function parseCellReference(cellRef: string): { col: string; row: number } | null {
-  const match = cellRef.toUpperCase().match(/^([A-Z]+)(\d+)$/)
-  if (!match) return null
-  return { col: match[1], row: parseInt(match[2]) }
-}
-
-function columnLetterToNumber(col: string): number {
-  let result = 0
-  for (let i = 0; i < col.length; i++) {
-    result = result * 26 + (col.charCodeAt(i) - 64)
-  }
-  return result
-}
 
 async function webSearch(query: string): Promise<string> {
   try {
@@ -132,37 +92,54 @@ async function webSearch(query: string): Promise<string> {
     if (data.RelatedTopics && data.RelatedTopics.length > 0) {
       return data.RelatedTopics.slice(0, 3).map((t: { Text?: string }) => t.Text).filter(Boolean).join('\n')
     }
-    return `Search completed for "${query}". No direct results found, but you can use general knowledge.`
+    return `Search completed for "${query}". No direct results found.`
   } catch {
-    return `Could not perform web search. Using general knowledge instead.`
+    return `Could not perform web search.`
   }
 }
 
+export interface AICommandResult {
+  success: boolean
+  message: string
+  actions: string[]
+  updatedState: SpreadsheetState
+  updatedHistory: ConversationMessage[]
+}
+
 export async function processAICommand(
-  spreadsheetId: string,
   command: string,
-  workbook: ExcelJS.Workbook,
-  activeSheet: string
-): Promise<{ success: boolean; message: string; actions: string[] }> {
-  const history = conversationHistory.get(spreadsheetId) || []
-  const actions: string[] = []
-  
-  const sheet = workbook.getWorksheet(activeSheet)
-  if (!sheet) {
-    return { success: false, message: 'Active sheet not found', actions: [] }
+  spreadsheetState: SpreadsheetState,
+  conversationHistory: ConversationMessage[] = []
+): Promise<AICommandResult> {
+  const apiKey = process.env.ANTHROPIC_API_KEY
+  if (!apiKey) {
+    return {
+      success: false,
+      message: 'ANTHROPIC_API_KEY environment variable is not set. Please add it in your Vercel project settings.',
+      actions: [],
+      updatedState: spreadsheetState,
+      updatedHistory: conversationHistory
+    }
   }
+
+  const anthropic = new Anthropic({ apiKey })
+  const actions: string[] = []
+  let currentState = { ...spreadsheetState }
+  const history = [...conversationHistory]
+  
+  const sheetNames = Object.keys(currentState.sheets)
+  const activeSheet = currentState.activeSheet
 
   const systemPrompt = `You are an Excel AI assistant that helps users manipulate spreadsheets using natural language. You have access to tools to modify the spreadsheet.
 
 Current spreadsheet state:
 - Active sheet: ${activeSheet}
-- Available sheets: ${workbook.worksheets.map(s => s.name).join(', ')}
+- Available sheets: ${sheetNames.join(', ')}
 
 When the user asks you to do something:
 1. Use the appropriate tools to make changes
 2. Be helpful and explain what you did
-3. If you need information from the web, use the web_search tool
-4. Always confirm the actions you took
+3. Always confirm the actions you took
 
 Be concise but friendly in your responses.`
 
@@ -187,53 +164,32 @@ Be concise but friendly in your responses.`
         const toolInput = block.input as Record<string, unknown>
         
         if (toolName === 'set_cell_value') {
-          const cellRef = parseCellReference(toolInput.cell as string)
-          if (cellRef) {
-            const cell = sheet.getCell(cellRef.row, columnLetterToNumber(cellRef.col))
-            const value = toolInput.value as string
-            if (value.startsWith('=')) {
-              cell.value = { formula: value.substring(1) }
-            } else if (!isNaN(Number(value))) {
-              cell.value = Number(value)
-            } else {
-              cell.value = value
-            }
-            actions.push(`Set ${toolInput.cell} to "${value}"`)
+          const cellRef = (toolInput.cell as string).toUpperCase()
+          const value = toolInput.value as string
+          let cellValue: string | number = value
+          
+          if (!isNaN(Number(value)) && value !== '') {
+            cellValue = Number(value)
           }
+          
+          currentState = setCell(currentState, activeSheet, cellRef, cellValue)
+          actions.push(`Set ${cellRef} to "${value}"`)
         } else if (toolName === 'get_cell_value') {
-          const cellRef = parseCellReference(toolInput.cell as string)
-          if (cellRef) {
-            const cell = sheet.getCell(cellRef.row, columnLetterToNumber(cellRef.col))
-            actions.push(`Read ${toolInput.cell}: ${cell.value || '(empty)'}`)
-          }
+          const cellRef = (toolInput.cell as string).toUpperCase()
+          const cell = getCell(currentState, activeSheet, cellRef)
+          const value = cell?.value ?? '(empty)'
+          actions.push(`Read ${cellRef}: ${value}`)
         } else if (toolName === 'set_cell_style') {
-          const cellRef = parseCellReference(toolInput.cell as string)
-          if (cellRef) {
-            const cell = sheet.getCell(cellRef.row, columnLetterToNumber(cellRef.col))
-            if (toolInput.bold !== undefined || toolInput.italic !== undefined || toolInput.color !== undefined) {
-              cell.font = {
-                ...cell.font,
-                bold: toolInput.bold as boolean | undefined,
-                italic: toolInput.italic as boolean | undefined,
-                color: toolInput.color ? { argb: `FF${toolInput.color}` } : undefined
-              }
-            }
-            if (toolInput.backgroundColor) {
-              cell.fill = {
-                type: 'pattern',
-                pattern: 'solid',
-                fgColor: { argb: `FF${toolInput.backgroundColor}` }
-              }
-            }
-            actions.push(`Styled ${toolInput.cell}`)
-          }
+          const cellRef = (toolInput.cell as string).toUpperCase()
+          currentState = setCellStyle(currentState, activeSheet, cellRef, {
+            bold: toolInput.bold as boolean | undefined,
+            italic: toolInput.italic as boolean | undefined
+          })
+          actions.push(`Styled ${cellRef}`)
         } else if (toolName === 'add_sheet') {
-          const newSheet = workbook.addWorksheet(toolInput.name as string)
-          actions.push(`Added new sheet: ${newSheet.name}`)
-        } else if (toolName === 'web_search') {
-          const searchResult = await webSearch(toolInput.query as string)
-          actions.push(`Searched: ${toolInput.query}`)
-          assistantMessage += `\n[Search result: ${searchResult}]`
+          const sheetName = toolInput.name as string
+          currentState = addSheet(currentState, sheetName)
+          actions.push(`Added new sheet: ${sheetName}`)
         }
       }
     }
@@ -243,15 +199,22 @@ Be concise but friendly in your responses.`
     }
 
     history.push({ role: 'assistant', content: assistantMessage })
-    conversationHistory.set(spreadsheetId, history)
 
-    return { success: true, message: assistantMessage, actions }
+    return {
+      success: true,
+      message: assistantMessage,
+      actions,
+      updatedState: currentState,
+      updatedHistory: history
+    }
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-    return { success: false, message: `AI error: ${errorMessage}`, actions: [] }
+    return {
+      success: false,
+      message: `AI error: ${errorMessage}`,
+      actions: [],
+      updatedState: spreadsheetState,
+      updatedHistory: conversationHistory
+    }
   }
-}
-
-export function clearHistory(spreadsheetId: string): void {
-  conversationHistory.delete(spreadsheetId)
 }

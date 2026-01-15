@@ -7,7 +7,6 @@ import { Input } from '@/components/ui/input'
 import { 
   FileSpreadsheet, 
   Plus, 
-  Download, 
   Send, 
   Bot, 
   User, 
@@ -17,20 +16,28 @@ import {
   MessageSquare
 } from 'lucide-react'
 
+// Types for client-side state management
 interface CellData {
   value: string | number | null
   formula?: string | null
   bold?: boolean
+  italic?: boolean
 }
 
 interface SheetData {
   cells: Record<string, CellData>
-  max_row: number
-  max_column: number
 }
 
-interface SpreadsheetData {
-  [sheetName: string]: SheetData
+interface SpreadsheetState {
+  id: string
+  name: string
+  sheets: Record<string, SheetData>
+  activeSheet: string
+}
+
+interface ConversationMessage {
+  role: 'user' | 'assistant'
+  content: string
 }
 
 interface ChatMessage {
@@ -41,12 +48,21 @@ interface ChatMessage {
   success?: boolean
 }
 
+// Create empty spreadsheet client-side
+function createEmptySpreadsheet(): SpreadsheetState {
+  return {
+    id: crypto.randomUUID(),
+    name: 'My Spreadsheet',
+    sheets: {
+      'Sheet1': { cells: {} }
+    },
+    activeSheet: 'Sheet1'
+  }
+}
+
 export default function Home() {
-  const [spreadsheetId, setSpreadsheetId] = useState<string | null>(null)
-  const [spreadsheetName, setSpreadsheetName] = useState<string>('')
-  const [sheets, setSheets] = useState<string[]>([])
-  const [activeSheet, setActiveSheet] = useState<string>('Sheet1')
-  const [spreadsheetData, setSpreadsheetData] = useState<SpreadsheetData>({})
+  const [spreadsheetState, setSpreadsheetState] = useState<SpreadsheetState | null>(null)
+  const [conversationHistory, setConversationHistory] = useState<ConversationMessage[]>([])
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [chatInput, setChatInput] = useState('')
@@ -76,23 +92,32 @@ export default function Home() {
   }
 
   const processCommand = async (command: string) => {
-    if (!spreadsheetId || !command.trim()) return
+    if (!spreadsheetState || !command.trim()) return
 
     addChatMessage('user', command)
     setIsLoading(true)
 
     try {
-      const response = await fetch(`/api/spreadsheet/${spreadsheetId}/ai-command`, {
+      const response = await fetch('/api/ai-command', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ command })
+        body: JSON.stringify({
+          command,
+          spreadsheetState,
+          conversationHistory
+        })
       })
 
       const result = await response.json()
       addChatMessage('assistant', result.message, result.success)
 
-      if (result.success && result.data?.spreadsheet) {
-        setSpreadsheetData(result.data.spreadsheet)
+      if (result.success) {
+        if (result.spreadsheetState) {
+          setSpreadsheetState(result.spreadsheetState)
+        }
+        if (result.conversationHistory) {
+          setConversationHistory(result.conversationHistory)
+        }
       }
     } catch {
       addChatMessage('assistant', 'Connection error. Please try again.', false)
@@ -101,34 +126,12 @@ export default function Home() {
     }
   }
 
-  const createSpreadsheet = async () => {
-    setIsLoading(true)
-
-    try {
-      const response = await fetch('/api/spreadsheet/create', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
-      })
-
-      const data = await response.json()
-      setSpreadsheetId(data.id)
-      setSpreadsheetName(data.name)
-      setSheets(data.sheets)
-      setActiveSheet(data.sheets[0])
-      setSpreadsheetData(data.data)
-      
-      addChatMessage('assistant', "Welcome! I've created a new spreadsheet for you. Tell me what you'd like to do - try commands like \"Set A1 to Hello\" or \"Create a budget with categories\".")
-    } catch {
-      addChatMessage('assistant', 'Failed to create spreadsheet. Please try again.', false)
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  const downloadSpreadsheet = () => {
-    if (spreadsheetId) {
-      window.open(`/api/spreadsheet/${spreadsheetId}/download`, '_blank')
-    }
+  const createSpreadsheet = () => {
+    const newSpreadsheet = createEmptySpreadsheet()
+    setSpreadsheetState(newSpreadsheet)
+    setConversationHistory([])
+    setChatMessages([])
+    addChatMessage('assistant', "Welcome! I've created a new spreadsheet for you. Tell me what you'd like to do - try commands like \"Set A1 to Hello\" or \"Create a budget with categories\".")
   }
 
   const handleCellClick = (cellRef: string) => {
@@ -137,31 +140,38 @@ export default function Home() {
 
   const handleCellDoubleClick = (cellRef: string) => {
     setEditingCell(cellRef)
-    const currentData = spreadsheetData[activeSheet]?.cells[cellRef]
-    setEditValue(currentData?.value?.toString() || '')
+    if (spreadsheetState) {
+      const currentData = spreadsheetState.sheets[spreadsheetState.activeSheet]?.cells[cellRef]
+      setEditValue(currentData?.value?.toString() || '')
+    }
   }
 
-  const handleCellEdit = async () => {
-    if (!editingCell || !spreadsheetId) return
+  const handleCellEdit = () => {
+    if (!editingCell || !spreadsheetState) return
 
-    try {
-      const response = await fetch(`/api/spreadsheet/${spreadsheetId}/cell`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          sheet_name: activeSheet,
-          cell: editingCell,
-          value: editValue
-        })
-      })
-
-      const result = await response.json()
-      if (result.success) {
-        setSpreadsheetData(result.data)
-      }
-    } catch {
-      addChatMessage('assistant', 'Failed to update cell', false)
+    const activeSheet = spreadsheetState.activeSheet
+    const sheet = spreadsheetState.sheets[activeSheet] || { cells: {} }
+    
+    let cellValue: string | number = editValue
+    if (!isNaN(Number(editValue)) && editValue !== '') {
+      cellValue = Number(editValue)
     }
+
+    setSpreadsheetState({
+      ...spreadsheetState,
+      sheets: {
+        ...spreadsheetState.sheets,
+        [activeSheet]: {
+          cells: {
+            ...sheet.cells,
+            [editingCell]: {
+              ...sheet.cells[editingCell],
+              value: cellValue
+            }
+          }
+        }
+      }
+    })
 
     setEditingCell(null)
     setEditValue('')
@@ -174,8 +184,19 @@ export default function Home() {
     }
   }
 
+  const setActiveSheet = (sheetName: string) => {
+    if (spreadsheetState) {
+      setSpreadsheetState({
+        ...spreadsheetState,
+        activeSheet: sheetName
+      })
+    }
+  }
+
   const renderSpreadsheet = () => {
-    const currentSheet = spreadsheetData[activeSheet]
+    if (!spreadsheetState) return null
+    
+    const currentSheet = spreadsheetState.sheets[spreadsheetState.activeSheet]
     if (!currentSheet) return null
 
     const columns = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
@@ -211,7 +232,7 @@ export default function Home() {
                       key={cellRef}
                       className={`border-b border-r border-slate-200 p-0 text-sm cursor-pointer transition-all ${
                         isSelected ? 'bg-emerald-50 ring-2 ring-emerald-500 ring-inset' : ''
-                      } ${cellData?.bold ? 'font-bold' : ''}`}
+                      } ${cellData?.bold ? 'font-bold' : ''} ${cellData?.italic ? 'italic' : ''}`}
                       onClick={() => handleCellClick(cellRef)}
                       onDoubleClick={() => handleCellDoubleClick(cellRef)}
                     >
@@ -300,12 +321,12 @@ export default function Home() {
             onChange={(e) => setChatInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSendMessage()}
             placeholder="Type a command..."
-            disabled={isLoading || !spreadsheetId}
+            disabled={isLoading || !spreadsheetState}
             className="flex-1 bg-white border-slate-200 focus-visible:ring-emerald-500"
           />
           <Button
             onClick={handleSendMessage}
-            disabled={isLoading || !chatInput.trim() || !spreadsheetId}
+            disabled={isLoading || !chatInput.trim() || !spreadsheetState}
             className="bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 shadow-lg shadow-emerald-500/25"
           >
             <Send className="w-4 h-4" />
@@ -315,7 +336,7 @@ export default function Home() {
     </div>
   )
 
-  if (!spreadsheetId) {
+  if (!spreadsheetState) {
     return (
       <main className="min-h-screen flex items-center justify-center p-4">
         <Card className="w-full max-w-md border-0 shadow-2xl bg-white/80 backdrop-blur-sm">
@@ -333,14 +354,9 @@ export default function Home() {
           <CardContent className="space-y-4">
             <Button
               onClick={createSpreadsheet}
-              disabled={isLoading}
               className="w-full h-12 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 shadow-lg shadow-emerald-500/25 text-base font-medium"
             >
-              {isLoading ? (
-                <Loader2 className="w-5 h-5 animate-spin mr-2" />
-              ) : (
-                <Plus className="w-5 h-5 mr-2" />
-              )}
+              <Plus className="w-5 h-5 mr-2" />
               Create New Spreadsheet
             </Button>
             <div className="text-center">
@@ -355,6 +371,8 @@ export default function Home() {
     )
   }
 
+  const sheets = Object.keys(spreadsheetState.sheets)
+
   return (
     <main className="min-h-screen flex flex-col">
       {/* Header */}
@@ -364,7 +382,7 @@ export default function Home() {
             <FileSpreadsheet className="w-5 h-5 text-white" />
           </div>
           <div>
-            <h1 className="font-semibold text-slate-800">{spreadsheetName}</h1>
+            <h1 className="font-semibold text-slate-800">{spreadsheetState.name}</h1>
             <p className="text-xs text-slate-500">{sheets.length} sheet(s)</p>
           </div>
         </div>
@@ -373,9 +391,6 @@ export default function Home() {
             <Sparkles className="w-3 h-3" />
             AI
           </div>
-          <Button variant="outline" size="icon" onClick={downloadSpreadsheet} className="rounded-xl">
-            <Download className="w-4 h-4" />
-          </Button>
         </div>
       </header>
 
@@ -421,7 +436,7 @@ export default function Home() {
                 key={sheet}
                 onClick={() => setActiveSheet(sheet)}
                 className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors whitespace-nowrap ${
-                  activeSheet === sheet
+                  spreadsheetState.activeSheet === sheet
                     ? 'bg-emerald-100 text-emerald-700'
                     : 'text-slate-600 hover:bg-slate-100'
                 }`}

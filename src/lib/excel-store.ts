@@ -1,70 +1,107 @@
-import ExcelJS from 'exceljs'
+// Utility functions for spreadsheet operations
+// Note: Vercel serverless functions are stateless, so we don't store data server-side
+// Instead, spreadsheet data is managed on the client and passed with each request
 
-interface SpreadsheetData {
+export interface CellData {
+  value: string | number | null
+  formula?: string | null
+  bold?: boolean
+  italic?: boolean
+  color?: string
+  backgroundColor?: string
+}
+
+export interface SheetData {
+  cells: Record<string, CellData>
+}
+
+export interface SpreadsheetState {
   id: string
   name: string
-  workbook: ExcelJS.Workbook
+  sheets: Record<string, SheetData>
   activeSheet: string
-  createdAt: Date
 }
 
-const spreadsheets = new Map<string, SpreadsheetData>()
-
-export function getSpreadsheet(id: string): SpreadsheetData | undefined {
-  return spreadsheets.get(id)
-}
-
-export function setSpreadsheet(id: string, data: SpreadsheetData): void {
-  spreadsheets.set(id, data)
-}
-
-export function deleteSpreadsheet(id: string): boolean {
-  return spreadsheets.delete(id)
-}
-
-export function createNewSpreadsheet(name: string = 'My Spreadsheet'): SpreadsheetData {
+export function createEmptySpreadsheet(name: string = 'My Spreadsheet'): SpreadsheetState {
   const id = crypto.randomUUID()
-  const workbook = new ExcelJS.Workbook()
-  workbook.addWorksheet('Sheet1')
-  
-  const data: SpreadsheetData = {
+  return {
     id,
     name,
-    workbook,
-    activeSheet: 'Sheet1',
-    createdAt: new Date()
+    sheets: {
+      'Sheet1': { cells: {} }
+    },
+    activeSheet: 'Sheet1'
   }
-  
-  spreadsheets.set(id, data)
-  return data
 }
 
-export function getSpreadsheetData(workbook: ExcelJS.Workbook): Record<string, unknown> {
-  const sheetsData: Record<string, unknown> = {}
-  
-  workbook.eachSheet((sheet) => {
-    const cells: Record<string, unknown> = {}
-    
-    sheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
-      row.eachCell({ includeEmpty: false }, (cell, colNumber) => {
-        const colLetter = String.fromCharCode(64 + colNumber)
-        const cellRef = `${colLetter}${rowNumber}`
-        cells[cellRef] = {
-          value: cell.value,
-          formula: cell.formula || null,
-          bold: cell.font?.bold || false
-        }
-      })
-    })
-    
-    sheetsData[sheet.name] = {
-      cells,
-      max_row: sheet.rowCount,
-      max_column: sheet.columnCount
+export function getSheetNames(state: SpreadsheetState): string[] {
+  return Object.keys(state.sheets)
+}
+
+export function addSheet(state: SpreadsheetState, sheetName: string): SpreadsheetState {
+  return {
+    ...state,
+    sheets: {
+      ...state.sheets,
+      [sheetName]: { cells: {} }
     }
-  })
-  
-  return sheetsData
+  }
 }
 
-export { spreadsheets }
+export function setCell(
+  state: SpreadsheetState, 
+  sheetName: string, 
+  cellRef: string, 
+  value: string | number | null,
+  style?: Partial<CellData>
+): SpreadsheetState {
+  const sheet = state.sheets[sheetName] || { cells: {} }
+  const existingCell = sheet.cells[cellRef] || {}
+  
+  return {
+    ...state,
+    sheets: {
+      ...state.sheets,
+      [sheetName]: {
+        cells: {
+          ...sheet.cells,
+          [cellRef]: {
+            ...existingCell,
+            value,
+            ...style
+          }
+        }
+      }
+    }
+  }
+}
+
+export function getCell(state: SpreadsheetState, sheetName: string, cellRef: string): CellData | undefined {
+  return state.sheets[sheetName]?.cells[cellRef]
+}
+
+export function setCellStyle(
+  state: SpreadsheetState,
+  sheetName: string,
+  cellRef: string,
+  style: Partial<CellData>
+): SpreadsheetState {
+  const sheet = state.sheets[sheetName] || { cells: {} }
+  const existingCell = sheet.cells[cellRef] || { value: null }
+  
+  return {
+    ...state,
+    sheets: {
+      ...state.sheets,
+      [sheetName]: {
+        cells: {
+          ...sheet.cells,
+          [cellRef]: {
+            ...existingCell,
+            ...style
+          }
+        }
+      }
+    }
+  }
+}
