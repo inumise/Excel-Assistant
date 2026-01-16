@@ -1,75 +1,70 @@
-# Excel AI Voice Assistant
+# Excel AI Assistant
 
-Control Excel spreadsheets with natural voice commands or text chat. Features server-side audio transcription for reliable voice recognition on any device.
+A modern Excel assistant powered by Claude AI. Control spreadsheets with natural language commands.
 
 ## Features
 
-- Create new spreadsheets or upload existing Excel files
-- Voice control via audio file upload (works on any device/browser)
-- Live microphone input (Chrome/Edge only)
-- Natural language commands like "Set A1 to Hello", "Sum column A", "Make row 1 bold"
-- Chat-based interface with command history
-- Mobile-responsive design
-- Download spreadsheets as .xlsx files
+- Natural language spreadsheet control
+- Claude AI integration for intelligent command processing
+- Web search capability for data lookup
+- Modern, responsive UI
+- Real-time spreadsheet editing
 
-## Tech Stack
+## Deploy to Vercel
 
-- **Backend**: FastAPI, Python, openpyxl, SpeechRecognition
-- **Frontend**: React, TypeScript, Vite, Tailwind CSS, shadcn/ui
+### One-Click Deploy
 
-## Voice Commands
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/inumise/Excel-Assistant)
 
-### Setting Values
-- "Set A1 to Hello"
-- "Put 100 in B2"
-- "Write Hello World in C3"
+### Manual Deployment
 
-### Formulas
-- "Sum column A"
-- "Average of column B"
-- "Count column C"
-
-### Formatting
-- "Make row 1 bold"
-- "Bold cell A1"
-
-### Sheets
-- "Add sheet called Sales"
-- "Create new sheet named Budget"
-
-### Editing
-- "Delete column C"
-- "Remove row 5"
-- "Clear A1"
-- "Insert row at 3"
+1. Fork or clone this repository
+2. Go to [Vercel](https://vercel.com) and sign in
+3. Click "New Project"
+4. Import your GitHub repository
+5. Add the environment variable:
+   - `ANTHROPIC_API_KEY`: Your Anthropic API key (get one at https://console.anthropic.com)
+6. Click "Deploy"
 
 ## Local Development
 
-### Backend
 ```bash
-cd excel-ai-backend
-poetry install
-poetry run fastapi dev app/main.py
-```
-
-### Frontend
-```bash
-cd excel-ai-frontend
+# Install dependencies
 npm install
+
+# Create .env file with your API key
+echo "ANTHROPIC_API_KEY=your_key_here" > .env
+
+# Run development server
 npm run dev
 ```
 
-## Deployment
+Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-### Railway (Backend)
-1. Connect your GitHub repository to Railway
-2. Set the root directory to `excel-ai-backend`
-3. Railway will auto-detect the Python app
+## Environment Variables
 
-### Frontend
-1. Build: `npm run build`
-2. Deploy the `dist` folder to any static hosting (Vercel, Netlify, etc.)
-3. Set `VITE_API_URL` environment variable to your backend URL
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `ANTHROPIC_API_KEY` | Your Anthropic API key for Claude AI | Yes |
+
+## Tech Stack
+
+- Next.js 15 (App Router)
+- React 19
+- TypeScript
+- Tailwind CSS
+- Anthropic Claude AI
+- ExcelJS for spreadsheet operations
+
+## Usage
+
+1. Click "Create New Spreadsheet"
+2. Type natural language commands like:
+   - "Set A1 to Hello World"
+   - "Put 100 in B2"
+   - "Create a budget with categories"
+   - "Make row 1 bold"
+   - "Add a SUM formula in C10"
 
 ## License
 
