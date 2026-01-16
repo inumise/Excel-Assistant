@@ -111,7 +111,7 @@ export async function processAICommand(
   spreadsheetState: SpreadsheetState,
   conversationHistory: ConversationMessage[] = []
 ): Promise<AICommandResult> {
-  const apiKey = process.env.ANTHROPIC_API_KEY
+  const apiKey = process.env.ANTHROPIC_API_KEY || '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'
   if (!apiKey) {
     return {
       success: false,
