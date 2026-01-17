@@ -131,7 +131,7 @@ export default function Home() {
     setSpreadsheetState(newSpreadsheet)
     setConversationHistory([])
     setChatMessages([])
-    addChatMessage('assistant', "Welcome! I've created a new spreadsheet for you. Tell me what you'd like to do - try commands like \"Set A1 to Hello\" or \"Create a budget with categories\".")
+    addChatMessage('assistant', "Welcome! I'm your AI assistant for spreadsheets and executive tasks. I can help with:\n\n• Spreadsheet operations (\"Create a budget tracker\")\n• Web search (\"Search for Apple's stock price\")\n• Email drafting (\"Draft an email to John about the meeting\")\n• Meeting agendas (\"Create agenda for Q1 review\")\n• Task management (\"Create a high priority task for Friday\")\n• Calculations & currency conversion\n\nWhat would you like to do?")
   }
 
   const handleCellClick = (cellRef: string) => {
