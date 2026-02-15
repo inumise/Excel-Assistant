@@ -6,7 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint .",
+    "lint": "next lint --no-cache",
     "test": "npm run test:unit",
     "test:unit": "vitest run",
     "test:watch": "vitest",

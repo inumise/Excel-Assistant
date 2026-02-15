@@ -49,7 +49,7 @@ export async function POST(request: Request) {
             data: {
               ...node.data,
               testsPassed: Boolean(body.fixed),
-              bugStatus: body.fixed ? ('fixed' as const) : ('failed' as const),
+              bugStatus: body.fixed ? 'fixed' : 'failed',
             },
           }
         : node

@@ -11,8 +11,8 @@ const runtimeCache = new Map<string, { qr?: string; status: 'pending' | 'connect
 async function maybeLoadWppModule(): Promise<WppModule | null> {
   if (process.env.WPPCONNECT_ENABLED !== 'true') return null
   try {
-    const loadedModule = (await import('@wppconnect-team/wppconnect')) as unknown as WppModule
-    return loadedModule
+    const module = (await import('@wppconnect-team/wppconnect')) as unknown as WppModule
+    return module
   } catch {
     return null
   }

@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { AlertTriangle, CheckCircle2, Loader2, Wrench } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -25,7 +25,7 @@ export default function BugtrackerWorkflowPage() {
   const [isRunning, setIsRunning] = useState(false)
   const [message, setMessage] = useState('')
 
-  const fetchRecords = useCallback(async () => {
+  const fetchRecords = async () => {
     setLoading(true)
     try {
       const response = await fetch(`/api/bugtracker?workflowId=${encodeURIComponent(workflowId)}`)
@@ -34,11 +34,11 @@ export default function BugtrackerWorkflowPage() {
     } finally {
       setLoading(false)
     }
-  }, [workflowId])
+  }
 
   useEffect(() => {
     if (workflowId) fetchRecords()
-  }, [fetchRecords, workflowId])
+  }, [workflowId])
 
   const runAutoFix = async () => {
     if (!records[0]) {

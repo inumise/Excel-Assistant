@@ -37,13 +37,9 @@ const edgePalette: Record<EdgeDataType, string> = {
 }
 
 function getEdgeStyle(edge: WorkflowEdge | Edge) {
-  const edgeDataType =
-    'dataType' in edge
-      ? edge.dataType
-      : ((edge as Edge).data as { dataType?: EdgeDataType } | undefined)?.dataType
-  const dataType = (edgeDataType || 'ai') as EdgeDataType
-  const existingData =
-    'data' in edge ? ((edge as Edge).data as Record<string, unknown> | undefined) : undefined
+  const dataType = ((edge as WorkflowEdge).dataType ||
+    (edge.data as { dataType?: EdgeDataType } | undefined)?.dataType ||
+    'ai') as EdgeDataType
   return {
     ...edge,
     animated: dataType === 'ai',
@@ -56,7 +52,7 @@ function getEdgeStyle(edge: WorkflowEdge | Edge) {
       type: 'arrowclosed',
       color: edgePalette[dataType],
     },
-    data: { ...(existingData || {}), dataType },
+    data: { ...(edge.data || {}), dataType },
   } as Edge
 }
 
@@ -208,7 +204,7 @@ function toSerializableWorkflow({
       id: edge.id,
       source: edge.source,
       target: edge.target,
-      label: typeof edge.label === 'string' ? edge.label : undefined,
+      label: edge.label,
       type: edge.type,
       dataType:
         ((edge.data as { dataType?: EdgeDataType } | undefined)?.dataType as EdgeDataType) || 'ai',
