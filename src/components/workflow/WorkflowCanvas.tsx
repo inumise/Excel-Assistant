@@ -800,7 +800,7 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
     } finally {
       setLoading(false)
     }
-  }, [hydrateWorkflow, pushToast, userId])
+  }, [hydrateWorkflow, pushToast, setEdges, setNodes, userId])
 
   const fetchAudit = useCallback(async () => {
     if (!activeWorkflowId) return
