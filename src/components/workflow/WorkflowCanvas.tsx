@@ -540,7 +540,7 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
       }
 
       setSelectedNodeId(id)
-      const rootHint = mode === 'root' ? id : parentId || selectedNode?.id
+      const rootHint = mode === 'root' ? id : parentId || selectedNodeId || undefined
       setTimeout(() => arrangeMindMap(rootHint), 0)
     },
     [
