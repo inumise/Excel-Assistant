@@ -391,12 +391,6 @@ export default function Home() {
             <Sparkles className="w-3 h-3" />
             AI
           </div>
-          <a
-            href="/workers"
-            className="rounded-full border border-[#FFD700]/40 bg-[#1A1A1A] px-3 py-1.5 text-xs font-medium text-[#FFD700] transition hover:bg-[#2B2B2B]"
-          >
-            Workflow Studio
-          </a>
         </div>
       </header>
 

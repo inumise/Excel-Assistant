@@ -1,98 +1,71 @@
-# Hyperplacity AI Workers (Pro)
+# Excel AI Assistant
 
-Luxury AI automation suite built on Next.js + React Flow + Supabase-compatible backend.
+A modern Excel assistant powered by Claude AI. Control spreadsheets with natural language commands.
 
-Palette: `#1A1A1A` / `#FFD700` / `#C9A483`
+## Features
 
-## What is included
+- Natural language spreadsheet control
+- Claude AI integration for intelligent command processing
+- Web search capability for data lookup
+- Modern, responsive UI
+- Real-time spreadsheet editing
 
-- **Legacy Excel AI Assistant** preserved on `/` and `/excel`
-- **Workflow Studio** on `/workers`
-  - Manager / Programmer / Code nodes
-  - Monaco code blocks with:
-    - AI Program
-    - Self-Change
-    - Delegate
-    - Bugtrack & Fix
-  - Typed edge colors (API blue, Code green, AI purple)
-  - Hierarchical node layout compatible with nested maps
-- **AI Manager Settings** on `/settings`
-  - OpenAI / Claude / Gemini key fields
-  - Creativity slider (0.2–1.0)
-  - Global prompt + tone preset
-  - WhatsApp number + QR session setup
-- **WhatsApp Webhook/API**
-  - `/api/whatsapp` parses commands like:
-    - `/cmd run workflow-web-design-factory`
-    - `run workflow-web-design-factory`
-  - `/api/whatsapp/qr` provisions QR/session metadata
-- **Bugtracker**
-  - `/bugtracker/[workflowId]` list and run auto-fix loop
-  - `/api/bugtracker/cron` implements:
-    - Fix bug -> Test -> if fail, escalate to Manager
-- **Audit log**
-  - `/api/audit` + server storage hooks
+## Deploy to Vercel
 
-## Demo template
+### One-Click Deploy
 
-Seeded workflow: **Web Design Factory**
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/inumise/Excel-Assistant)
 
-Flow:
+### Manual Deployment
 
-`Manager AI -> Programmer AI -> Code Node -> Bugtracker -> WhatsApp confirmation`
+1. Fork or clone this repository
+2. Go to [Vercel](https://vercel.com) and sign in
+3. Click "New Project"
+4. Import your GitHub repository
+5. Add the environment variable:
+   - `ANTHROPIC_API_KEY`: Your Anthropic API key (get one at https://console.anthropic.com)
+6. Click "Deploy"
 
-## Supabase schema and RLS
-
-Migration:
-
-`supabase/migrations/202602150001_hyperplacity_pro.sql`
-
-Includes:
-
-- `users` (`whatsapp_number`, `ai_keys`, `global_prompt`, `creativity_temp`)
-- `workflows`
-- `nodes` (`type`, `code_snippet`, `tests_passed`)
-- `bugtracks`
-- `whatsapp_sessions` (`user_id`, `session_data`)
-- `audit_log`
-
-RLS policies ensure users only access their own keys/sessions/workflows.
-
-## Quick start
+## Local Development
 
 ```bash
+# Install dependencies
 npm install
+
+# Create .env file with your API key
+echo "ANTHROPIC_API_KEY=your_key_here" > .env
+
+# Run development server
 npm run dev
 ```
 
-Open:
+Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-- `http://localhost:3000/` (legacy Excel assistant)
-- `http://localhost:3000/workers`
-- `http://localhost:3000/settings`
-- `http://localhost:3000/bugtracker/workflow-web-design-factory`
+## Environment Variables
 
-## Useful scripts
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `ANTHROPIC_API_KEY` | Your Anthropic API key for Claude AI | Yes |
 
-```bash
-npm run lint
-npm run test:unit
-npm run test:e2e
-npm run bugtrack:check
-```
+## Tech Stack
 
-## Environment variables
+- Next.js 15 (App Router)
+- React 19
+- TypeScript
+- Tailwind CSS
+- Anthropic Claude AI
+- ExcelJS for spreadsheet operations
 
-See `.env.example` for all options, including:
+## Usage
 
-- Anthropic key for AI generation
-- Supabase URL/service key
-- AI key encryption secret
-- Optional WPP Connect enable flag
-- Optional SuperTokens client domains
+1. Click "Create New Spreadsheet"
+2. Type natural language commands like:
+   - "Set A1 to Hello World"
+   - "Put 100 in B2"
+   - "Create a budget with categories"
+   - "Make row 1 bold"
+   - "Add a SUM formula in C10"
 
-## GitHub / VS Code workflow tie-in
+## License
 
-- REST APIs are under `src/app/api/*` for direct inspection/debug in VS Code.
-- Unit + E2E tests are provided in `/tests` for CI hooks on GitHub Actions.
-- Bugtracker loop is callable manually (`/api/bugtracker/cron`) to integrate with PR/CI checks.
+MIT
