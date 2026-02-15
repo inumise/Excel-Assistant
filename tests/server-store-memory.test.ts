@@ -1,12 +1,13 @@
-import { describe, expect, it } from 'vitest'
-import {
-  deleteMemoryRecord,
-  listMemoryRecords,
-  upsertMemoryRecord,
-} from '@/lib/server-store'
+import { describe, expect, it, vi } from 'vitest'
+
+vi.mock('server-only', () => ({}), { virtual: true })
 
 describe('memory vault store', () => {
   it('upserts, lists, and deletes workflow memory entries', async () => {
+    const { deleteMemoryRecord, listMemoryRecords, upsertMemoryRecord } = await import(
+      '@/lib/server-store'
+    )
+
     const userId = '11111111-1111-4111-8111-111111111111'
     const workflowId = 'workflow-memory-spec'
     const namespace = `spec-${Date.now()}`
