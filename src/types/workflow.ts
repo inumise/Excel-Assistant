@@ -38,6 +38,7 @@ export interface WorkflowNodeData {
   role: NodeRole
   workerType?: string
   prompt: string
+  capabilities?: string[]
   codeSnippet?: CodeSnippet
   testsPassed?: boolean
   bugStatus?: 'idle' | 'running' | 'failed' | 'fixed'
