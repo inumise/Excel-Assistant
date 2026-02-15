@@ -37,19 +37,7 @@ export default function RootLayout({
                   href="/"
                   className="rounded-md border border-[#93C5FD] px-3 py-1.5 text-[#1D4ED8] hover:bg-[#EFF6FF]"
                 >
-                  Mind Map
-                </Link>
-                <Link
-                  href="/settings"
-                  className="rounded-md border border-[#C7D2FE] px-3 py-1.5 text-[#4338CA] hover:bg-[#EEF2FF]"
-                >
-                  AI Manager
-                </Link>
-                <Link
-                  href="/bugtracker/workflow-web-design-factory"
-                  className="rounded-md border border-[#FBCFE8] px-3 py-1.5 text-[#BE185D] hover:bg-[#FDF2F8]"
-                >
-                  Bugtracker
+                  Board
                 </Link>
               </nav>
             </div>

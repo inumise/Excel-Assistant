@@ -1,6 +1,13 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type DragEvent,
+} from 'react'
 import ReactFlow, {
   addEdge,
   Background,
@@ -22,7 +29,6 @@ import {
   BadgeDollarSign,
   BarChart3,
   BriefcaseBusiness,
-  Bug,
   Calculator,
   Code2,
   FileSpreadsheet,
@@ -31,23 +37,37 @@ import {
   Loader2,
   Megaphone,
   Palette,
+  PlusCircle,
   Save,
   Scale,
   Send,
   ServerCog,
-  Settings2,
   ShieldCheck,
   ShoppingCart,
   Sparkles,
+  Target,
   TestTube2,
   UserRoundPlus,
+  Workflow as WorkflowIcon,
+  ZoomIn,
+  ZoomOut,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { CodeBlock } from '@/components/Node/CodeBlock'
 import { DEMO_USER_ID } from '@/lib/workflow-template'
-import { calculateMindMapLayout, getDescendantIds } from '@/lib/mind-map-layout'
-import { EdgeDataType, Workflow, WorkflowEdge, WorkflowNodeData } from '@/types/workflow'
+import {
+  calculateMindMapLayout,
+  getDescendantIds,
+  inferMindMapRoot,
+} from '@/lib/mind-map-layout'
+import {
+  EdgeDataType,
+  NodeRole,
+  Workflow,
+  WorkflowEdge,
+  WorkflowNodeData,
+} from '@/types/workflow'
 
 interface FlowNodeData extends WorkflowNodeData {
   userId: string
@@ -55,193 +75,229 @@ interface FlowNodeData extends WorkflowNodeData {
   onPatchNode: (nodeId: string, patch: Partial<WorkflowNodeData>) => void
 }
 
-const edgePalette: Record<EdgeDataType, string> = {
-  api: '#3B82F6',
-  code: '#22C55E',
-  ai: '#A855F7',
-}
-
-interface WorkerTemplate {
+interface LibraryItem {
   id: string
   label: string
+  category: 'worker' | 'tool' | 'function'
   description: string
   icon: React.ComponentType<{ className?: string }>
   accent: string
-  role: 'manager' | 'programmer' | 'code'
-  prompt: string
+  role: NodeRole
   edgeType: EdgeDataType
+  defaultPrompt: string
+  defaultCapabilities: string[]
 }
 
-const workerTemplates: WorkerTemplate[] = [
+const edgePalette: Record<EdgeDataType, string> = {
+  api: '#2563EB',
+  code: '#059669',
+  ai: '#7C3AED',
+}
+
+const libraryItems: LibraryItem[] = [
   {
     id: 'manager-core',
     label: 'Manager AI',
-    description: 'Orchestrates sub-agents, priorities, and escalation paths.',
+    category: 'worker',
+    description: 'CEO-level orchestrator for departments and escalation trees.',
     icon: BriefcaseBusiness,
-    accent: '#FFD700',
+    accent: '#F59E0B',
     role: 'manager',
-    prompt: 'Coordinate specialist workers and escalate blockers.',
     edgeType: 'ai',
-  },
-  {
-    id: 'programmer-core',
-    label: 'Programmer AI',
-    description: 'Generates, refactors, and maintains autonomous code.',
-    icon: Code2,
-    accent: '#C9A483',
-    role: 'programmer',
-    prompt: 'Implement production-ready code and automation tasks.',
-    edgeType: 'code',
+    defaultPrompt: 'Coordinate all specialist workers and track strategic goals.',
+    defaultCapabilities: ['planning', 'delegation', 'escalation'],
   },
   {
     id: 'excel-assistant',
     label: 'Excel Assistant',
-    description: 'Builds reports, formulas, pivots, and executive sheets.',
+    category: 'worker',
+    description: 'Builds reports, formulas, pivots, reconciliations, and board sheets.',
     icon: FileSpreadsheet,
-    accent: '#3B82F6',
+    accent: '#2563EB',
     role: 'code',
-    prompt: 'Automate spreadsheet operations, formulas, and reports.',
     edgeType: 'api',
+    defaultPrompt: 'Automate spreadsheet operations and executive dashboards.',
+    defaultCapabilities: ['formulas', 'pivots', 'reporting'],
   },
   {
-    id: 'pr-agent',
+    id: 'pr-writer',
     label: 'PR Writer Agent',
-    description: 'Writes external communication and outreach messaging.',
+    category: 'worker',
+    description: 'Drafts messages, outreach, announcements, and media statements.',
     icon: Megaphone,
     accent: '#A855F7',
     role: 'programmer',
-    prompt: 'Draft and adapt public relations messaging for channels.',
     edgeType: 'ai',
+    defaultPrompt: 'Create channel-specific messaging with tone controls.',
+    defaultCapabilities: ['copywriting', 'outreach', 'brand voice'],
   },
   {
     id: 'accountant',
     label: 'Accountant Agent',
-    description: 'Handles reconciliation, margin analysis, and forecasts.',
+    category: 'worker',
+    description: 'Handles P&L, forecast, budget variance, and reconciliations.',
     icon: Calculator,
-    accent: '#22C55E',
+    accent: '#059669',
     role: 'code',
-    prompt: 'Build P&L, forecast, reconciliation, and audit output.',
     edgeType: 'api',
+    defaultPrompt: 'Generate monthly financial packages and variance summaries.',
+    defaultCapabilities: ['forecast', 'reconciliation', 'budgeting'],
   },
   {
     id: 'sales',
     label: 'Sales Strategist',
-    description: 'Optimizes outreach funnels, win-rates, and CRM actions.',
+    category: 'worker',
+    description: 'Improves conversion, outreach cadences, and CRM actions.',
     icon: Handshake,
     accent: '#EAB308',
     role: 'programmer',
-    prompt: 'Generate outbound and follow-up strategy with conversion focus.',
     edgeType: 'ai',
+    defaultPrompt: 'Design winning outreach flows and qualification scripts.',
+    defaultCapabilities: ['crm', 'outbound', 'follow-up'],
   },
   {
     id: 'hr',
     label: 'HR Recruiter',
-    description: 'Manages hiring flow, candidate summaries, and onboarding.',
+    category: 'worker',
+    description: 'Runs hiring pipeline, scorecards, and onboarding checklists.',
     icon: UserRoundPlus,
     accent: '#F97316',
     role: 'programmer',
-    prompt: 'Screen applicants, write scorecards, and coordinate interviews.',
     edgeType: 'ai',
+    defaultPrompt: 'Screen candidates and manage interview operations.',
+    defaultCapabilities: ['screening', 'onboarding', 'interviewing'],
   },
   {
     id: 'legal',
     label: 'Legal Compliance',
-    description: 'Tracks policies, contracts, and regulatory checklists.',
+    category: 'worker',
+    description: 'Tracks contracts, policy obligations, and risk controls.',
     icon: Scale,
     accent: '#EF4444',
     role: 'manager',
-    prompt: 'Review risk posture and compliance controls per workflow.',
     edgeType: 'api',
+    defaultPrompt: 'Maintain compliance posture and legal readiness.',
+    defaultCapabilities: ['contracts', 'policy', 'risk'],
   },
   {
     id: 'support',
     label: 'Support Agent',
-    description: 'Handles inbound tickets, triage, and customer follow-ups.',
+    category: 'worker',
+    description: 'Handles inbound requests, SLA routing, and customer updates.',
     icon: Headset,
     accent: '#0EA5E9',
     role: 'programmer',
-    prompt: 'Classify support issues and compose contextual responses.',
     edgeType: 'ai',
+    defaultPrompt: 'Triages support tickets and drafts responses.',
+    defaultCapabilities: ['triage', 'sla', 'knowledge base'],
   },
   {
     id: 'marketing',
     label: 'Marketing Analyst',
-    description: 'Creates campaigns, channel plans, and content calendars.',
+    category: 'worker',
+    description: 'Builds campaign plans, calendars, and KPI analysis.',
     icon: BarChart3,
     accent: '#EC4899',
     role: 'programmer',
-    prompt: 'Plan campaigns with KPI projections and weekly objectives.',
     edgeType: 'ai',
+    defaultPrompt: 'Design growth experiments and report channel metrics.',
+    defaultCapabilities: ['campaigns', 'analytics', 'content'],
   },
   {
     id: 'security',
     label: 'Security Monitor',
-    description: 'Monitors incidents, compliance, and vulnerability posture.',
+    category: 'worker',
+    description: 'Monitors incidents, controls, and vulnerability posture.',
     icon: ShieldCheck,
     accent: '#10B981',
     role: 'manager',
-    prompt: 'Track security findings and enforce remediation policy.',
     edgeType: 'api',
+    defaultPrompt: 'Track security events and enforce remediation workflows.',
+    defaultCapabilities: ['security', 'alerts', 'audit'],
   },
   {
     id: 'devops',
     label: 'DevOps Engineer',
-    description: 'Maintains CI/CD, infra health, and release pipelines.',
+    category: 'worker',
+    description: 'Manages CI/CD pipelines, infra health, and releases.',
     icon: ServerCog,
     accent: '#6366F1',
     role: 'code',
-    prompt: 'Automate deployment and reliability checks for services.',
     edgeType: 'code',
+    defaultPrompt: 'Automate deployment, rollback, and platform reliability.',
+    defaultCapabilities: ['ci/cd', 'infra', 'observability'],
   },
   {
     id: 'qa',
     label: 'QA Tester',
-    description: 'Creates tests, validates flows, and reports regressions.',
+    category: 'worker',
+    description: 'Builds regression tests, acceptance tests, and release checks.',
     icon: TestTube2,
     accent: '#14B8A6',
     role: 'code',
-    prompt: 'Design and run e2e and regression test suites.',
     edgeType: 'code',
+    defaultPrompt: 'Execute automated and exploratory validation plans.',
+    defaultCapabilities: ['testing', 'validation', 'quality gate'],
   },
   {
-    id: 'design',
+    id: 'designer',
     label: 'Brand Designer',
-    description: 'Produces visual concepts, assets, and UX refinements.',
+    category: 'worker',
+    description: 'Creates design systems, assets, and visual direction.',
     icon: Palette,
-    accent: '#A855F7',
+    accent: '#8B5CF6',
     role: 'programmer',
-    prompt: 'Generate premium visual direction and component variants.',
     edgeType: 'ai',
+    defaultPrompt: 'Produce premium visual output and design specs.',
+    defaultCapabilities: ['design system', 'assets', 'ui/ux'],
   },
   {
-    id: 'finance',
+    id: 'finance-controller',
     label: 'Finance Controller',
-    description: 'Oversees budgets, runway and spend governance.',
+    category: 'worker',
+    description: 'Tracks runway, cashflow, and spend governance.',
     icon: BadgeDollarSign,
-    accent: '#22C55E',
+    accent: '#16A34A',
     role: 'manager',
-    prompt: 'Track budget adherence and trigger variance alerts.',
     edgeType: 'api',
+    defaultPrompt: 'Oversee spend controls and forecast runway shifts.',
+    defaultCapabilities: ['cashflow', 'governance', 'runway'],
   },
   {
     id: 'procurement',
     label: 'Procurement Agent',
-    description: 'Coordinates purchasing, vendor approvals, and RFQs.',
+    category: 'worker',
+    description: 'Compares vendors, RFQs, and supply decisions.',
     icon: ShoppingCart,
     accent: '#FB7185',
     role: 'code',
-    prompt: 'Compare vendor bids and produce sourcing recommendations.',
     edgeType: 'api',
+    defaultPrompt: 'Optimize purchasing with vendor score comparisons.',
+    defaultCapabilities: ['vendor scoring', 'rfq', 'purchasing'],
   },
   {
-    id: 'code',
-    label: 'Code Node',
-    description: 'Raw executable block for custom scripts and tasks.',
-    icon: Code2,
-    accent: '#22C55E',
+    id: 'browser-automation',
+    label: 'Browser Automation Tool',
+    category: 'tool',
+    description: 'Performs agentic web actions and multi-step UI tasks.',
+    icon: WorkflowIcon,
+    accent: '#2563EB',
     role: 'code',
-    prompt: 'Executable code unit with bugtracking.',
     edgeType: 'code',
+    defaultPrompt: 'Run browser-based workflows and scripted operations.',
+    defaultCapabilities: ['web actions', 'playwright', 'rpa'],
+  },
+  {
+    id: 'universal-function',
+    label: 'Universal Function Node',
+    category: 'function',
+    description: 'Blank function block for any custom operation imaginable.',
+    icon: Code2,
+    accent: '#1D4ED8',
+    role: 'code',
+    edgeType: 'code',
+    defaultPrompt: 'Implement custom function logic for this branch.',
+    defaultCapabilities: ['custom logic', 'api integration', 'transform'],
   },
 ]
 
@@ -253,13 +309,14 @@ function getEdgeStyle(edge: WorkflowEdge | Edge) {
   const dataType = (edgeDataType || 'ai') as EdgeDataType
   const existingData =
     'data' in edge ? ((edge as Edge).data as Record<string, unknown> | undefined) : undefined
+
   return {
     ...edge,
     animated: dataType === 'ai',
     label: edge.label || dataType.toUpperCase(),
     style: {
       stroke: edgePalette[dataType],
-      strokeWidth: 2.2,
+      strokeWidth: 2.4,
     },
     markerEnd: {
       type: 'arrowclosed',
@@ -273,25 +330,22 @@ function NodeShell({
   title,
   subtitle,
   children,
-  borderColor,
-  isSelected,
+  selected,
 }: {
   title: string
   subtitle: string
   children: React.ReactNode
-  borderColor: string
-  isSelected?: boolean
+  selected?: boolean
 }) {
   return (
     <div
       className={`rgb-node-shell min-w-[280px] rounded-2xl p-3 shadow-xl ${
-        isSelected ? 'ring-2 ring-[#6D28D9]/50' : ''
+        selected ? 'ring-2 ring-[#4338CA]/40' : ''
       }`}
-      style={{ borderColor, borderWidth: 1 }}
     >
       <div className="mb-2">
-        <div className="text-sm font-semibold text-[#111827]">{title}</div>
-        <p className="text-[11px] text-[#374151]">{subtitle}</p>
+        <div className="text-sm font-semibold text-[#0F172A]">{title}</div>
+        <p className="text-[11px] text-[#334155]">{subtitle}</p>
       </div>
       {children}
     </div>
@@ -300,35 +354,24 @@ function NodeShell({
 
 function ManagerNode({ id, data, selected }: NodeProps<FlowNodeData>) {
   return (
-    <NodeShell
-      title={data.label}
-      subtitle={data.workerType || 'Manager AI (orchestrator)'}
-      borderColor="#F59E0B"
-      isSelected={selected}
-    >
+    <NodeShell title={data.label} subtitle={data.workerType || 'Manager Node'} selected={selected}>
       <Handle type="target" position={Position.Left} className="!bg-[#F59E0B]" />
       <p className="mb-2 text-xs text-[#1F2937]">{data.prompt}</p>
-      <div className="rounded-lg border border-[#FBBF24]/40 bg-[#FFF9E8] p-2 text-[11px] text-[#7C2D12]">
-        Global flow coordinator. If auto-fix fails, manager escalation is triggered.
+      <div className="rounded-lg border border-[#FCD34D]/50 bg-[#FFFBEB] p-2 text-[11px] text-[#92400E]">
+        Controls strategy, budgets, priorities, and cross-team escalation.
       </div>
       <Handle type="source" position={Position.Right} className="!bg-[#F59E0B]" />
-      <Handle type="source" position={Position.Bottom} className="!bg-[#F59E0B]" />
     </NodeShell>
   )
 }
 
 function ProgrammerNode({ id, data, selected }: NodeProps<FlowNodeData>) {
   return (
-    <NodeShell
-      title={data.label}
-      subtitle={data.workerType || 'Programmer AI (code generation)'}
-      borderColor="#7C3AED"
-      isSelected={selected}
-    >
+    <NodeShell title={data.label} subtitle={data.workerType || 'Programmer Node'} selected={selected}>
       <Handle type="target" position={Position.Left} className="!bg-[#7C3AED]" />
       <p className="mb-2 text-xs text-[#1F2937]">{data.prompt}</p>
-      <div className="rounded-lg border border-[#A78BFA]/40 bg-[#F5F3FF] p-2 text-[11px] text-[#5B21B6]">
-        Delegates to helper agents and emits implementation blocks.
+      <div className="rounded-lg border border-[#C4B5FD]/60 bg-[#F5F3FF] p-2 text-[11px] text-[#5B21B6]">
+        Handles logic, content generation, and process automation orchestration.
       </div>
       <Handle type="source" position={Position.Right} className="!bg-[#7C3AED]" />
     </NodeShell>
@@ -337,12 +380,7 @@ function ProgrammerNode({ id, data, selected }: NodeProps<FlowNodeData>) {
 
 function CodeNode({ id, data, selected }: NodeProps<FlowNodeData>) {
   return (
-    <NodeShell
-      title={data.label}
-      subtitle={data.workerType || 'Self-modifying code node'}
-      borderColor="#2563EB"
-      isSelected={selected}
-    >
+    <NodeShell title={data.label} subtitle={data.workerType || 'Function Node'} selected={selected}>
       <Handle type="target" position={Position.Left} className="!bg-[#2563EB]" />
       <CodeBlock
         userId={data.userId}
@@ -366,29 +404,6 @@ function CodeNode({ id, data, selected }: NodeProps<FlowNodeData>) {
         }
         onStatusChange={(status) => data.onPatchNode(id, status)}
       />
-      <div className="mt-2 grid grid-cols-2 gap-2 text-[11px]">
-        <label className="flex items-center justify-between rounded-md border border-[#93C5FD] bg-[#EFF6FF] px-2 py-1 text-[#1D4ED8]">
-          Error Check
-          <input
-            type="checkbox"
-            checked={data.errorCheckEnabled}
-            onChange={(event) => data.onPatchNode(id, { errorCheckEnabled: event.target.checked })}
-          />
-        </label>
-        <select
-          value={data.monitoring}
-          onChange={(event) =>
-            data.onPatchNode(id, {
-              monitoring: event.target.value as WorkflowNodeData['monitoring'],
-            })
-          }
-          className="rounded-md border border-[#93C5FD] bg-[#EFF6FF] px-2 py-1 text-[#1D4ED8]"
-        >
-          <option value="none">No monitor</option>
-          <option value="sentry">Sentry</option>
-          <option value="newrelic">New Relic</option>
-        </select>
-      </div>
       <Handle type="source" position={Position.Right} className="!bg-[#2563EB]" />
     </NodeShell>
   )
@@ -400,15 +415,13 @@ const nodeTypes = {
   code: CodeNode,
 }
 
-function toSerializableWorkflow({
-  workflow,
-  nodes,
-  edges,
-}: {
+function toSerializableWorkflow(params: {
   workflow: Workflow
   nodes: Node<FlowNodeData>[]
   edges: Edge[]
-}): Workflow {
+}) {
+  const { workflow, nodes, edges } = params
+
   return {
     ...workflow,
     updatedAt: new Date().toISOString(),
@@ -424,6 +437,7 @@ function toSerializableWorkflow({
         role: node.data.role,
         workerType: node.data.workerType,
         prompt: node.data.prompt,
+        capabilities: node.data.capabilities,
         codeSnippet: node.data.codeSnippet,
         testsPassed: node.data.testsPassed,
         bugStatus: node.data.bugStatus,
@@ -437,30 +451,38 @@ function toSerializableWorkflow({
       id: edge.id,
       source: edge.source,
       target: edge.target,
-      label: typeof edge.label === 'string' ? edge.label : undefined,
       type: edge.type,
+      label: typeof edge.label === 'string' ? edge.label : undefined,
       dataType:
-        ((edge.data as { dataType?: EdgeDataType } | undefined)?.dataType as EdgeDataType) || 'ai',
+        ((edge.data as { dataType?: EdgeDataType } | undefined)?.dataType as EdgeDataType) ||
+        'ai',
     })),
-  }
+  } satisfies Workflow
+}
+
+function parseCapabilities(input: string) {
+  return input
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean)
 }
 
 export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
   const [loading, setLoading] = useState(true)
   const [workflows, setWorkflows] = useState<Workflow[]>([])
-  const [activeWorkflowId, setActiveWorkflowId] = useState<string>('')
+  const [activeWorkflowId, setActiveWorkflowId] = useState('')
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
   const [collapsedNodeIds, setCollapsedNodeIds] = useState<string[]>([])
-  const [templateId, setTemplateId] = useState<string>('manager-core')
-  const [workerSearch, setWorkerSearch] = useState('')
+  const [librarySearch, setLibrarySearch] = useState('')
+  const [selectedLibraryId, setSelectedLibraryId] = useState(libraryItems[0].id)
+  const [autoConnectFromSelection, setAutoConnectFromSelection] = useState(true)
+  const [connectType, setConnectType] = useState<EdgeDataType>('ai')
   const [customWorkerName, setCustomWorkerName] = useState('Custom Specialist')
   const [customWorkerPrompt, setCustomWorkerPrompt] = useState(
-    'Define a custom specialist mission and workflow objectives.'
+    'Define custom responsibilities and measurable objectives.'
   )
-  const [customWorkerRole, setCustomWorkerRole] = useState<'manager' | 'programmer' | 'code'>(
-    'programmer'
-  )
-  const [autoConnectFromSelection, setAutoConnectFromSelection] = useState(true)
+  const [customWorkerRole, setCustomWorkerRole] = useState<NodeRole>('programmer')
+  const [customCapabilitiesText, setCustomCapabilitiesText] = useState('custom-task')
   const [runInput, setRunInput] = useState('run workflow-web-design-factory')
   const [runOutput, setRunOutput] = useState('')
   const [auditRows, setAuditRows] = useState<
@@ -468,6 +490,7 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
   >([])
   const [isSaving, setIsSaving] = useState(false)
   const [isRunning, setIsRunning] = useState(false)
+
   const [flowInstance, setFlowInstance] = useState<ReactFlowInstance | null>(null)
   const flowWrapperRef = useRef<HTMLDivElement | null>(null)
 
@@ -478,18 +501,19 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
     () => workflows.find((workflow) => workflow.id === activeWorkflowId) || null,
     [workflows, activeWorkflowId]
   )
+
   const selectedNode = useMemo(
     () => (selectedNodeId ? nodes.find((node) => node.id === selectedNodeId) || null : null),
     [nodes, selectedNodeId]
   )
-  const filteredTemplates = useMemo(() => {
-    const query = workerSearch.trim().toLowerCase()
-    if (!query) return workerTemplates
-    return workerTemplates.filter((template) => {
-      const content = `${template.label} ${template.description}`.toLowerCase()
-      return content.includes(query)
-    })
-  }, [workerSearch])
+
+  const filteredLibrary = useMemo(() => {
+    const query = librarySearch.trim().toLowerCase()
+    if (!query) return libraryItems
+    return libraryItems.filter((item) =>
+      `${item.label} ${item.description} ${item.category}`.toLowerCase().includes(query)
+    )
+  }, [librarySearch])
 
   const patchNode = useCallback(
     (nodeId: string, patch: Partial<WorkflowNodeData>) => {
@@ -512,7 +536,7 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
 
   const hydrateWorkflow = useCallback(
     (workflow: Workflow) => {
-      const nextNodes: Node<FlowNodeData>[] = workflow.nodes.map((node) => ({
+      const hydratedNodes: Node<FlowNodeData>[] = workflow.nodes.map((node) => ({
         ...node,
         type: node.type === 'group' ? 'manager' : node.type,
         data: {
@@ -523,12 +547,11 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
         },
       }))
 
-      const nextEdges = workflow.edges.map((edge) => getEdgeStyle(edge))
-      setNodes(nextNodes)
-      setEdges(nextEdges)
+      setNodes(hydratedNodes)
+      setEdges(workflow.edges.map((edge) => getEdgeStyle(edge)))
       setActiveWorkflowId(workflow.id)
-      setSelectedNodeId(null)
       setCollapsedNodeIds([])
+      setSelectedNodeId(null)
     },
     [patchNode, setEdges, setNodes, userId]
   )
@@ -565,130 +588,58 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
     fetchAudit()
   }, [fetchAudit, runOutput])
 
-  const onConnect = useCallback(
-    (connection: Connection) => {
-      setEdges((currentEdges) =>
-        addEdge(
-          getEdgeStyle({
-            ...connection,
-            id: `edge-${Date.now()}`,
-            dataType: 'ai',
-            label: 'AI',
-            type: 'smoothstep',
-          } as unknown as WorkflowEdge),
-          currentEdges
+  const applyMindMapLayout = useCallback(
+    (rootId?: string) => {
+      if (!nodes.length) return
+      const inferredRoot =
+        rootId ||
+        selectedNodeId ||
+        inferMindMapRoot(
+          nodes.map((node) => ({ id: node.id, position: node.position })),
+          edges.map((edge) => ({ source: edge.source, target: edge.target }))
         )
-      )
-    },
-    [setEdges]
-  )
-
-  const saveWorkflow = useCallback(async () => {
-    if (!activeWorkflow) return
-    setIsSaving(true)
-
-    try {
-      const serialized = toSerializableWorkflow({
-        workflow: activeWorkflow,
-        nodes,
-        edges,
-      })
-
-      const response = await fetch('/api/workflows', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(serialized),
-      })
-      const data = await response.json()
-      const saved = data.workflow as Workflow
-
-      setWorkflows((previous) => previous.map((item) => (item.id === saved.id ? saved : item)))
-      hydrateWorkflow(saved)
-    } finally {
-      setIsSaving(false)
-    }
-  }, [activeWorkflow, edges, hydrateWorkflow, nodes])
-
-  const runWorkflow = useCallback(async () => {
-    if (!activeWorkflow) return
-    setIsRunning(true)
-
-    try {
-      const response = await fetch(`/api/workflows/${activeWorkflow.id}/run`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId,
-          triggerText: runInput,
-          notifyWhatsapp: true,
-        }),
-      })
-      const data = await response.json()
-      setRunOutput(data.output || data.message || 'No output')
-    } finally {
-      setIsRunning(false)
-    }
-  }, [activeWorkflow, runInput, userId])
-
-  const arrangeMindMap = useCallback(
-    (rootNodeId?: string) => {
-      const inferredRootId =
-        rootNodeId || selectedNodeId || nodes.find((node) => node.data.role === 'manager')?.id || nodes[0]?.id
-      if (!inferredRootId) return
+      if (!inferredRoot) return
 
       const layout = calculateMindMapLayout(
         nodes.map((node) => ({ id: node.id, position: node.position })),
         edges.map((edge) => ({ source: edge.source, target: edge.target })),
-        { rootId: inferredRootId }
+        { rootId: inferredRoot, xSpacing: 340, ySpacing: 140 }
       )
 
-      setNodes((prev) => {
-        let changed = false
-        const next = prev.map((node) => {
+      setNodes((prev) =>
+        prev.map((node) => {
           const position = layout.get(node.id)
           if (!position) return node
-
-          const sourcePosition = position.x >= 0 ? Position.Right : Position.Left
-          const targetPosition = position.x >= 0 ? Position.Left : Position.Right
-          if (
-            node.position.x === position.x &&
-            node.position.y === position.y &&
-            node.sourcePosition === sourcePosition &&
-            node.targetPosition === targetPosition
-          ) {
-            return node
+          return {
+            ...node,
+            position,
+            sourcePosition: position.x >= 0 ? Position.Right : Position.Left,
+            targetPosition: position.x >= 0 ? Position.Left : Position.Right,
           }
-
-          changed = true
-          return { ...node, position, sourcePosition, targetPosition }
         })
-        return changed ? next : prev
-      })
+      )
     },
     [edges, nodes, selectedNodeId, setNodes]
   )
 
   const createNodeObject = useCallback(
-    (
-      template: WorkerTemplate,
-      id: string,
-      position: { x: number; y: number }
-    ): Node<FlowNodeData> => ({
+    (item: LibraryItem, id: string, position: { x: number; y: number }): Node<FlowNodeData> => ({
       id,
-      type: template.role,
+      type: item.role,
       position,
       sourcePosition: position.x >= 0 ? Position.Right : Position.Left,
       targetPosition: position.x >= 0 ? Position.Left : Position.Right,
       data: {
-        label: template.label,
-        role: template.role,
-        workerType: template.label,
-        prompt: template.prompt,
+        label: item.label,
+        workerType: item.label,
+        role: item.role,
+        prompt: item.defaultPrompt,
+        capabilities: [...item.defaultCapabilities],
         codeSnippet:
-          template.role === 'code'
+          item.role === 'code'
             ? {
                 language: 'typescript',
-                content: 'export const workerTask = () => "Mind map worker active";\n',
+                content: 'export const runTask = () => "custom function output";\n',
               }
             : undefined,
         testsPassed: true,
@@ -704,156 +655,228 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
     [activeWorkflowId, patchNode, userId]
   )
 
-  const createCustomTemplate = useCallback((): WorkerTemplate => {
-    const label = customWorkerName.trim() || 'Custom Specialist'
+  const buildCustomItem = useCallback((): LibraryItem => {
+    const name = customWorkerName.trim() || 'Custom Specialist'
     const prompt =
-      customWorkerPrompt.trim() ||
-      'Define a custom specialist mission and workflow objectives.'
+      customWorkerPrompt.trim() || 'Define custom responsibilities and measurable objectives.'
+    const caps = parseCapabilities(customCapabilitiesText)
+
     return {
       id: `custom-${Date.now()}`,
-      label,
-      description: 'User-defined role for special business workflows.',
+      label: name,
+      category: 'worker',
+      description: 'Custom user-defined worker for unique business functions.',
       icon: Sparkles,
       accent: '#2563EB',
       role: customWorkerRole,
-      prompt,
       edgeType: customWorkerRole === 'code' ? 'code' : 'ai',
+      defaultPrompt: prompt,
+      defaultCapabilities: caps.length > 0 ? caps : ['custom-task'],
     }
-  }, [customWorkerName, customWorkerPrompt, customWorkerRole])
+  }, [
+    customCapabilitiesText,
+    customWorkerName,
+    customWorkerPrompt,
+    customWorkerRole,
+  ])
 
-  const addNodeFromTemplate = useCallback(
-    (
-      mode: 'root' | 'child' | 'sibling' | 'drop',
-      forcedTemplateId?: string,
-      forcedPosition?: { x: number; y: number },
-      forcedTemplate?: WorkerTemplate
-    ) => {
-      const template =
-        forcedTemplate ||
-        workerTemplates.find((item) => item.id === (forcedTemplateId || templateId)) ||
-        workerTemplates[0]
-      const parentFromIncoming = selectedNodeId
+  const addFromLibrary = useCallback(
+    (params: {
+      mode: 'root' | 'child' | 'sibling' | 'drop'
+      item?: LibraryItem
+      itemId?: string
+      position?: { x: number; y: number }
+    }) => {
+      const item =
+        params.item ||
+        libraryItems.find((candidate) => candidate.id === (params.itemId || selectedLibraryId)) ||
+        libraryItems[0]
+
+      const selectedIncomingParent = selectedNodeId
         ? edges.find((edge) => edge.target === selectedNodeId)?.source
         : undefined
+
       const parentId =
-        mode === 'child'
+        params.mode === 'child'
           ? selectedNodeId || undefined
-          : mode === 'sibling'
-          ? parentFromIncoming || selectedNodeId || undefined
-          : mode === 'drop'
+          : params.mode === 'sibling'
+          ? selectedIncomingParent || selectedNodeId || undefined
+          : params.mode === 'drop'
           ? autoConnectFromSelection
             ? selectedNodeId || undefined
             : undefined
           : undefined
+
       const parentNode = parentId ? nodes.find((node) => node.id === parentId) : null
-      const siblingCount = parentId ? edges.filter((edge) => edge.source === parentId).length : nodes.length
+      const siblingsCount = parentId
+        ? edges.filter((edge) => edge.source === parentId).length
+        : nodes.length
       const direction = (parentNode?.position.x || 0) < 0 ? -1 : 1
 
-      const id = `${template.id}-${Date.now()}`
       const position =
-        forcedPosition ||
+        params.position ||
         (parentNode
           ? {
-              x: parentNode.position.x + direction * 300,
-              y: parentNode.position.y + (siblingCount - 1) * 120,
+              x: parentNode.position.x + direction * 320,
+              y: parentNode.position.y + (siblingsCount - 1) * 130,
             }
           : {
               x: 0,
-              y: Math.max(0, nodes.length - 1) * 120,
+              y: Math.max(0, nodes.length - 1) * 130,
             })
 
-      setNodes((prev) => [...prev, createNodeObject(template, id, position)])
+      const id = `${item.id}-${Date.now()}`
+      setNodes((prev) => [...prev, createNodeObject(item, id, position)])
+
       if (parentId) {
-        const nextEdge = getEdgeStyle({
-          id: `edge-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-          source: parentId,
-          target: id,
-          dataType: template.edgeType,
-          label: template.edgeType.toUpperCase(),
-          type: 'smoothstep',
-        } as unknown as WorkflowEdge)
-        setEdges((prev) => [...prev, nextEdge])
+        setEdges((prev) => [
+          ...prev,
+          getEdgeStyle({
+            id: `edge-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+            source: parentId,
+            target: id,
+            type: 'smoothstep',
+            dataType: item.edgeType,
+            label: item.edgeType.toUpperCase(),
+          } as WorkflowEdge),
+        ])
       }
 
       setSelectedNodeId(id)
-      if (mode !== 'drop') {
-        const rootHint = mode === 'root' ? id : parentId || selectedNodeId || undefined
-        setTimeout(() => arrangeMindMap(rootHint), 0)
+      if (params.mode !== 'drop') {
+        const rootHint = params.mode === 'root' ? id : parentId || undefined
+        setTimeout(() => applyMindMapLayout(rootHint), 0)
       }
     },
     [
-      arrangeMindMap,
+      applyMindMapLayout,
       autoConnectFromSelection,
       createNodeObject,
       edges,
       nodes,
+      selectedLibraryId,
       selectedNodeId,
       setEdges,
       setNodes,
-      templateId,
     ]
   )
 
-  const onTemplateDragStart = useCallback((event: DragEvent<HTMLButtonElement>, id: string) => {
-    event.dataTransfer.setData('application/x-hyper-worker-template', id)
-    event.dataTransfer.effectAllowed = 'copyMove'
-  }, [])
-
-  const onFlowDragOver = useCallback((event: DragEvent<HTMLDivElement>) => {
-    event.preventDefault()
-    event.dataTransfer.dropEffect = 'move'
-  }, [])
-
-  const onFlowDrop = useCallback(
-    (event: DragEvent<HTMLDivElement>) => {
-      event.preventDefault()
-      const droppedTemplateId = event.dataTransfer.getData('application/x-hyper-worker-template')
-      if (!droppedTemplateId) return
-
-      const bounds = flowWrapperRef.current?.getBoundingClientRect()
-      const fallbackPosition = bounds
-        ? {
-            x: event.clientX - bounds.left,
-            y: event.clientY - bounds.top,
-          }
-        : { x: 0, y: 0 }
-      const position = flowInstance
-        ? flowInstance.screenToFlowPosition({
-            x: event.clientX,
-            y: event.clientY,
-          })
-        : fallbackPosition
-
-      addNodeFromTemplate('drop', droppedTemplateId, position)
+  const onConnect = useCallback(
+    (connection: Connection) => {
+      setEdges((prev) =>
+        addEdge(
+          getEdgeStyle({
+            ...connection,
+            id: `edge-${Date.now()}`,
+            type: 'smoothstep',
+            dataType: connectType,
+            label: connectType.toUpperCase(),
+          } as WorkflowEdge),
+          prev
+        )
+      )
     },
-    [addNodeFromTemplate, flowInstance]
+    [connectType, setEdges]
   )
 
-  const toggleCollapse = useCallback(() => {
+  const onTemplateDragStart = useCallback(
+    (event: DragEvent<HTMLButtonElement>, itemId: string) => {
+      event.dataTransfer.setData('application/x-ceo-board-item', itemId)
+      event.dataTransfer.effectAllowed = 'copy'
+    },
+    []
+  )
+
+  const onCanvasDragOver = useCallback((event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    event.dataTransfer.dropEffect = 'copy'
+  }, [])
+
+  const onCanvasDrop = useCallback(
+    (event: DragEvent<HTMLDivElement>) => {
+      event.preventDefault()
+      const itemId = event.dataTransfer.getData('application/x-ceo-board-item')
+      if (!itemId) return
+
+      const fallbackPosition = (() => {
+        const bounds = flowWrapperRef.current?.getBoundingClientRect()
+        if (!bounds) return { x: 0, y: 0 }
+        return { x: event.clientX - bounds.left, y: event.clientY - bounds.top }
+      })()
+
+      const position = flowInstance
+        ? flowInstance.screenToFlowPosition({ x: event.clientX, y: event.clientY })
+        : fallbackPosition
+
+      addFromLibrary({ mode: 'drop', itemId, position })
+    },
+    [addFromLibrary, flowInstance]
+  )
+
+  const toggleCollapseSelected = useCallback(() => {
     if (!selectedNodeId) return
     setCollapsedNodeIds((prev) =>
-      prev.includes(selectedNodeId) ? prev.filter((nodeId) => nodeId !== selectedNodeId) : [...prev, selectedNodeId]
+      prev.includes(selectedNodeId)
+        ? prev.filter((id) => id !== selectedNodeId)
+        : [...prev, selectedNodeId]
     )
   }, [selectedNodeId])
 
   const deleteSelectedBranch = useCallback(() => {
     if (!selectedNodeId) return
-
-    const descendants = new Set(
+    const descendantIds = new Set(
       getDescendantIds(
         selectedNodeId,
         edges.map((edge) => ({ source: edge.source, target: edge.target }))
       )
     )
-    descendants.add(selectedNodeId)
+    descendantIds.add(selectedNodeId)
 
-    setNodes((prev) => prev.filter((node) => !descendants.has(node.id)))
+    setNodes((prev) => prev.filter((node) => !descendantIds.has(node.id)))
     setEdges((prev) =>
-      prev.filter((edge) => !descendants.has(edge.source) && !descendants.has(edge.target))
+      prev.filter(
+        (edge) =>
+          !descendantIds.has(edge.source) && !descendantIds.has(edge.target)
+      )
     )
-    setCollapsedNodeIds((prev) => prev.filter((nodeId) => !descendants.has(nodeId)))
+    setCollapsedNodeIds((prev) =>
+      prev.filter((nodeId) => !descendantIds.has(nodeId))
+    )
     setSelectedNodeId(null)
   }, [edges, selectedNodeId, setEdges, setNodes])
+
+  const duplicateSelectedNode = useCallback(() => {
+    if (!selectedNode) return
+    const cloneId = `${selectedNode.id}-copy-${Date.now()}`
+    const clone: Node<FlowNodeData> = {
+      ...selectedNode,
+      id: cloneId,
+      position: {
+        x: selectedNode.position.x + 90,
+        y: selectedNode.position.y + 60,
+      },
+      data: {
+        ...selectedNode.data,
+        label: `${selectedNode.data.label} Copy`,
+      },
+    }
+
+    setNodes((prev) => [...prev, clone])
+    if (autoConnectFromSelection) {
+      setEdges((prev) => [
+        ...prev,
+        getEdgeStyle({
+          id: `edge-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          source: selectedNode.id,
+          target: cloneId,
+          dataType: connectType,
+          type: 'smoothstep',
+          label: connectType.toUpperCase(),
+        } as WorkflowEdge),
+      ])
+    }
+    setSelectedNodeId(cloneId)
+  }, [autoConnectFromSelection, connectType, selectedNode, setEdges, setNodes])
 
   useEffect(() => {
     const hiddenNodeIds = new Set<string>()
@@ -891,17 +914,56 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
     })
   }, [collapsedNodeIds, edges, setEdges, setNodes])
 
-  const fitMindMap = useCallback(() => {
-    flowInstance?.fitView({ duration: 350, padding: 0.22 })
+  const fitView = useCallback(() => {
+    flowInstance?.fitView({ duration: 320, padding: 0.22 })
   }, [flowInstance])
 
   const zoomIn = useCallback(() => {
-    flowInstance?.zoomIn({ duration: 250 })
+    flowInstance?.zoomIn({ duration: 220 })
   }, [flowInstance])
 
   const zoomOut = useCallback(() => {
-    flowInstance?.zoomOut({ duration: 250 })
+    flowInstance?.zoomOut({ duration: 220 })
   }, [flowInstance])
+
+  const saveWorkflow = useCallback(async () => {
+    if (!activeWorkflow) return
+    setIsSaving(true)
+    try {
+      const workflow = toSerializableWorkflow({ workflow: activeWorkflow, nodes, edges })
+      const response = await fetch('/api/workflows', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(workflow),
+      })
+      const data = await response.json()
+      const saved = data.workflow as Workflow
+      setWorkflows((prev) => prev.map((item) => (item.id === saved.id ? saved : item)))
+      hydrateWorkflow(saved)
+    } finally {
+      setIsSaving(false)
+    }
+  }, [activeWorkflow, edges, hydrateWorkflow, nodes])
+
+  const runWorkflow = useCallback(async () => {
+    if (!activeWorkflow) return
+    setIsRunning(true)
+    try {
+      const response = await fetch(`/api/workflows/${activeWorkflow.id}/run`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId,
+          triggerText: runInput,
+          notifyWhatsapp: true,
+        }),
+      })
+      const data = await response.json()
+      setRunOutput(data.output || data.message || 'No output')
+    } finally {
+      setIsRunning(false)
+    }
+  }, [activeWorkflow, runInput, userId])
 
   if (loading) {
     return (
@@ -913,302 +975,482 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
 
   return (
     <ReactFlowProvider>
-      <div className="overflow-x-auto pb-2">
-        <div className="grid min-w-[1080px] gap-4 lg:grid-cols-[340px_1fr]">
-          <aside className="rgb-glow-card space-y-3 rounded-3xl p-4">
-            <div>
-              <h3 className="mb-1 text-sm font-semibold text-[#0F172A]">Worker Types</h3>
-              <p className="text-xs text-[#334155]">
-                Build any 2D workforce structure. Drag a card to the canvas, connect agents, and
-                zoom/pan freely.
-              </p>
+      <div className="space-y-4">
+        <section className="rgb-glow-card rounded-2xl p-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="mr-3 flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-xs font-semibold text-[#1D4ED8] shadow-sm">
+              <Target className="h-4 w-4" />
+              CEO Command Board
             </div>
 
-            <div className="grid gap-2">
-              <label className="text-xs font-medium text-[#1E293B]">Active workflow</label>
-              <select
-                value={activeWorkflowId}
-                onChange={(event) => {
-                  setActiveWorkflowId(event.target.value)
-                  const next = workflows.find((workflow) => workflow.id === event.target.value)
-                  if (next) hydrateWorkflow(next)
-                }}
-                className="h-9 rounded-lg border border-[#CBD5E1] bg-white px-3 text-xs text-[#0F172A]"
-              >
-                {workflows.map((workflow) => (
-                  <option key={workflow.id} value={workflow.id}>
-                    {workflow.name}
-                  </option>
-                ))}
-              </select>
+            <label className="text-xs font-medium text-[#334155]">Connection Type</label>
+            <select
+              value={connectType}
+              onChange={(event) => setConnectType(event.target.value as EdgeDataType)}
+              className="h-9 rounded-lg border border-[#CBD5E1] bg-white px-2 text-xs text-[#0F172A]"
+            >
+              <option value="ai">AI</option>
+              <option value="api">API</option>
+              <option value="code">Code</option>
+            </select>
+
+            <Input
+              value={runInput}
+              onChange={(event) => setRunInput(event.target.value)}
+              className="min-w-[260px] flex-1 border-[#CBD5E1] bg-white text-xs text-[#0F172A]"
+              placeholder="Type execution command..."
+            />
+
+            <Button className="h-9 bg-[#2563EB] text-white hover:bg-[#1D4ED8]" onClick={fitView}>
+              Fit
+            </Button>
+            <Button className="h-9 bg-[#1E293B] text-white hover:bg-[#0F172A]" onClick={zoomIn}>
+              <ZoomIn className="mr-1 h-4 w-4" />
+              Zoom
+            </Button>
+            <Button className="h-9 bg-[#1E293B] text-white hover:bg-[#0F172A]" onClick={zoomOut}>
+              <ZoomOut className="mr-1 h-4 w-4" />
+              Out
+            </Button>
+            <Button
+              className="h-9 bg-[#4F46E5] text-white hover:bg-[#4338CA]"
+              onClick={saveWorkflow}
+              disabled={isSaving}
+            >
+              {isSaving ? (
+                <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+              ) : (
+                <Save className="mr-1 h-4 w-4" />
+              )}
+              Save
+            </Button>
+            <Button
+              className="h-9 bg-[#0EA5E9] text-white hover:bg-[#0284C7]"
+              onClick={runWorkflow}
+              disabled={isRunning}
+            >
+              {isRunning ? (
+                <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+              ) : (
+                <Send className="mr-1 h-4 w-4" />
+              )}
+              Run
+            </Button>
+          </div>
+        </section>
+
+        <div className="overflow-x-auto pb-2">
+          <div className="grid min-w-[1180px] gap-4 lg:grid-cols-[320px_minmax(0,1fr)_320px]">
+            <aside className="rgb-glow-card space-y-3 rounded-3xl p-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-[#0F172A]">Role + Tool Library</h3>
+                <span className="rounded-full bg-[#EEF2FF] px-2 py-0.5 text-[10px] text-[#4338CA]">
+                  {filteredLibrary.length} items
+                </span>
+              </div>
+
               <Input
-                value={workerSearch}
-                onChange={(event) => setWorkerSearch(event.target.value)}
-                placeholder="Search worker types..."
+                value={librarySearch}
+                onChange={(event) => setLibrarySearch(event.target.value)}
+                placeholder="Search workers/tools/functions..."
                 className="h-9 border-[#CBD5E1] bg-white text-xs text-[#0F172A]"
               />
-            </div>
 
-            <div className="max-h-[38vh] space-y-2 overflow-auto pr-1">
-              {filteredTemplates.map((template) => {
-                const Icon = template.icon
-                const isSelectedTemplate = templateId === template.id
-                return (
-                  <button
-                    key={template.id}
-                    draggable
-                    onDragStart={(event) => onTemplateDragStart(event, template.id)}
-                    onClick={() => setTemplateId(template.id)}
-                    className={`rgb-worker-card w-full rounded-xl p-2 text-left transition ${
-                      isSelectedTemplate ? 'ring-2 ring-[#4338CA]/30' : ''
-                    }`}
-                  >
-                    <div className="mb-1 flex items-center gap-2">
-                      <span
-                        className="flex h-7 w-7 items-center justify-center rounded-lg"
-                        style={{ backgroundColor: `${template.accent}20`, color: template.accent }}
-                      >
-                        <Icon className="h-4 w-4" />
-                      </span>
-                      <p className="text-xs font-semibold text-[#0F172A]">{template.label}</p>
-                    </div>
-                    <p className="text-[11px] text-[#334155]">{template.description}</p>
-                  </button>
-                )
-              })}
-            </div>
+              <div className="max-h-[38vh] space-y-2 overflow-auto pr-1">
+                {filteredLibrary.map((item) => {
+                  const Icon = item.icon
+                  const selected = selectedLibraryId === item.id
+                  return (
+                    <button
+                      key={item.id}
+                      draggable
+                      onDragStart={(event) => onTemplateDragStart(event, item.id)}
+                      onClick={() => setSelectedLibraryId(item.id)}
+                      className={`rgb-worker-card w-full rounded-xl p-2 text-left transition ${
+                        selected ? 'ring-2 ring-[#4338CA]/35' : ''
+                      }`}
+                    >
+                      <div className="mb-1 flex items-center justify-between">
+                        <span className="inline-flex items-center gap-2">
+                          <span
+                            className="flex h-7 w-7 items-center justify-center rounded-lg"
+                            style={{ backgroundColor: `${item.accent}22`, color: item.accent }}
+                          >
+                            <Icon className="h-4 w-4" />
+                          </span>
+                          <span className="text-xs font-semibold text-[#0F172A]">{item.label}</span>
+                        </span>
+                        <span className="rounded bg-[#F1F5F9] px-1.5 py-0.5 text-[10px] uppercase text-[#475569]">
+                          {item.category}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-[#334155]">{item.description}</p>
+                    </button>
+                  )
+                })}
+              </div>
 
-            <div className="rounded-2xl border border-[#BFDBFE] bg-[#EFF6FF] p-3">
-              <p className="mb-2 text-xs font-semibold text-[#1D4ED8]">Custom Worker Creator</p>
-              <div className="space-y-2">
-                <Input
-                  value={customWorkerName}
-                  onChange={(event) => setCustomWorkerName(event.target.value)}
-                  className="h-8 border-[#93C5FD] bg-white text-xs text-[#0F172A]"
-                  placeholder="Custom worker name"
-                />
-                <select
-                  value={customWorkerRole}
-                  onChange={(event) =>
-                    setCustomWorkerRole(event.target.value as 'manager' | 'programmer' | 'code')
-                  }
-                  className="h-8 w-full rounded-lg border border-[#93C5FD] bg-white px-2 text-xs text-[#0F172A]"
-                >
-                  <option value="manager">Manager</option>
-                  <option value="programmer">Programmer</option>
-                  <option value="code">Code</option>
-                </select>
-                <textarea
-                  value={customWorkerPrompt}
-                  onChange={(event) => setCustomWorkerPrompt(event.target.value)}
-                  rows={2}
-                  className="w-full rounded-lg border border-[#93C5FD] bg-white px-2 py-1 text-xs text-[#0F172A] outline-none"
-                />
-                <div className="grid grid-cols-2 gap-2">
+              <div className="rounded-2xl border border-[#BFDBFE] bg-[#EFF6FF] p-3">
+                <p className="mb-2 text-xs font-semibold text-[#1D4ED8]">Insert Selected Item</p>
+                <div className="grid grid-cols-3 gap-2">
                   <Button
                     size="sm"
-                    className="h-8 bg-[#2563EB] text-white hover:bg-[#1D4ED8]"
-                    onClick={() =>
-                      addNodeFromTemplate('root', undefined, undefined, createCustomTemplate())
-                    }
+                    className="h-8 bg-white text-[#1E293B] hover:bg-[#F8FAFC]"
+                    onClick={() => addFromLibrary({ mode: 'root' })}
                   >
-                    <Sparkles className="mr-1 h-3.5 w-3.5" />
-                    Add Root
+                    Root
                   </Button>
                   <Button
                     size="sm"
                     disabled={!selectedNodeId}
-                    className="h-8 bg-[#4F46E5] text-white hover:bg-[#4338CA]"
-                    onClick={() =>
-                      addNodeFromTemplate('child', undefined, undefined, createCustomTemplate())
-                    }
+                    className="h-8 bg-white text-[#1E293B] hover:bg-[#F8FAFC]"
+                    onClick={() => addFromLibrary({ mode: 'child' })}
                   >
-                    Add Child
+                    Child
+                  </Button>
+                  <Button
+                    size="sm"
+                    disabled={!selectedNodeId}
+                    className="h-8 bg-white text-[#1E293B] hover:bg-[#F8FAFC]"
+                    onClick={() => addFromLibrary({ mode: 'sibling' })}
+                  >
+                    Sibling
                   </Button>
                 </div>
               </div>
-            </div>
 
-            <div className="rounded-2xl border border-[#C7D2FE] bg-[#EEF2FF] p-3">
-              <p className="mb-2 text-xs font-semibold text-[#312E81]">Mind Map Controls</p>
-              <div className="mb-2 grid grid-cols-3 gap-2">
-                <Button
-                  size="sm"
-                  className="h-8 bg-white text-[#1E293B] hover:bg-[#F8FAFC]"
-                  onClick={() => addNodeFromTemplate('root')}
-                >
-                  Root
-                </Button>
-                <Button
-                  size="sm"
-                  disabled={!selectedNodeId}
-                  className="h-8 bg-white text-[#1E293B] hover:bg-[#F8FAFC]"
-                  onClick={() => addNodeFromTemplate('child')}
-                >
-                  Child
-                </Button>
-                <Button
-                  size="sm"
-                  disabled={!selectedNodeId}
-                  className="h-8 bg-white text-[#1E293B] hover:bg-[#F8FAFC]"
-                  onClick={() => addNodeFromTemplate('sibling')}
-                >
-                  Sibling
-                </Button>
-              </div>
-              <div className="mb-2 grid grid-cols-3 gap-2">
-                <Button
-                  size="sm"
-                  className="h-8 bg-[#2563EB] text-white hover:bg-[#1D4ED8]"
-                  onClick={() => arrangeMindMap()}
-                >
-                  Arrange
-                </Button>
-                <Button
-                  size="sm"
-                  disabled={!selectedNodeId}
-                  className="h-8 bg-[#7C3AED] text-white hover:bg-[#6D28D9]"
-                  onClick={toggleCollapse}
-                >
-                  {selectedNodeId && collapsedNodeIds.includes(selectedNodeId) ? 'Expand' : 'Collapse'}
-                </Button>
-                <Button
-                  size="sm"
-                  disabled={!selectedNodeId}
-                  className="h-8 bg-[#DC2626] text-white hover:bg-[#B91C1C]"
-                  onClick={deleteSelectedBranch}
-                >
-                  Delete
-                </Button>
-              </div>
-              <label className="flex items-center justify-between text-[11px] text-[#334155]">
-                Auto-connect dropped worker
-                <input
-                  type="checkbox"
-                  checked={autoConnectFromSelection}
-                  onChange={(event) => setAutoConnectFromSelection(event.target.checked)}
-                />
-              </label>
-              <p className="mt-2 text-[11px] text-[#334155]">
-                Selected: {selectedNode?.data.label || 'none'}
-              </p>
-            </div>
-
-            <div className="grid gap-2">
-              <label className="text-xs font-medium text-[#1E293B]">Run command</label>
-              <Input
-                value={runInput}
-                onChange={(event) => setRunInput(event.target.value)}
-                className="h-9 border-[#CBD5E1] bg-white text-xs text-[#0F172A]"
-                placeholder='Example: /cmd run workflow-web-design-factory'
-              />
-              <div className="grid grid-cols-2 gap-2">
-                <Button
-                  onClick={saveWorkflow}
-                  disabled={isSaving}
-                  className="h-9 bg-[#1D4ED8] text-white hover:bg-[#1E40AF]"
-                >
-                  {isSaving ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Save className="mr-1 h-4 w-4" />}
-                  Save
-                </Button>
-                <Button
-                  onClick={runWorkflow}
-                  disabled={isRunning}
-                  className="h-9 bg-[#4F46E5] text-white hover:bg-[#4338CA]"
-                >
-                  {isRunning ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Send className="mr-1 h-4 w-4" />}
-                  Run
-                </Button>
-              </div>
-            </div>
-          </aside>
-
-          <div
-            ref={flowWrapperRef}
-            className="rgb-wave-space relative h-[80vh] overflow-hidden rounded-3xl border border-[#E2E8F0]"
-            onDragOver={onFlowDragOver}
-            onDrop={onFlowDrop}
-          >
-            <ReactFlow
-              nodes={nodes}
-              edges={edges}
-              nodeTypes={nodeTypes}
-              onNodesChange={onNodesChange}
-              onEdgesChange={onEdgesChange}
-              onConnect={onConnect}
-              onNodeClick={(_, node) => setSelectedNodeId(node.id)}
-              onPaneClick={() => setSelectedNodeId(null)}
-              onInit={setFlowInstance}
-              fitView
-              proOptions={{ hideAttribution: true }}
-            >
-              <Background color="#C7D2FE" gap={18} />
-              <MiniMap
-                pannable
-                zoomable
-                nodeStrokeWidth={2}
-                nodeColor={(node) => {
-                  if (node.type === 'manager') return '#F59E0B'
-                  if (node.type === 'programmer') return '#7C3AED'
-                  return '#2563EB'
-                }}
-              />
-              <Controls />
-            </ReactFlow>
-
-            <div className="pointer-events-none absolute left-4 top-4 rounded-lg border border-[#BFDBFE] bg-white/85 px-3 py-2 text-[11px] text-[#1E3A8A] shadow">
-              Drag worker cards from left. Connect handles to build any structure.
-            </div>
-
-            <div className="absolute right-4 top-4 flex gap-2">
-              <Button
-                size="sm"
-                className="h-8 bg-white text-[#1E293B] shadow hover:bg-[#F8FAFC]"
-                onClick={zoomIn}
-              >
-                Zoom +
-              </Button>
-              <Button
-                size="sm"
-                className="h-8 bg-white text-[#1E293B] shadow hover:bg-[#F8FAFC]"
-                onClick={zoomOut}
-              >
-                Zoom -
-              </Button>
-              <Button
-                size="sm"
-                className="h-8 bg-[#2563EB] text-white shadow hover:bg-[#1D4ED8]"
-                onClick={fitMindMap}
-              >
-                Fit View
-              </Button>
-            </div>
-
-            <div className="absolute bottom-4 right-4 w-72 rounded-xl border border-[#BFDBFE] bg-white/90 p-3 shadow-lg">
-              <div className="mb-1 flex items-center gap-2 text-xs font-semibold text-[#1D4ED8]">
-                <Settings2 className="h-3.5 w-3.5" />
-                Last Run Output
-              </div>
-              <pre className="max-h-28 overflow-auto whitespace-pre-wrap text-[11px] text-[#1F2937]">
-                {runOutput || 'No execution yet.'}
-              </pre>
-            </div>
-
-            <div className="absolute bottom-4 left-4 w-72 rounded-xl border border-[#C7D2FE] bg-white/90 p-3 shadow-lg">
-              <div className="mb-1 flex items-center gap-2 text-xs font-semibold text-[#4338CA]">
-                <Bug className="h-3.5 w-3.5" />
-                Audit Log
-              </div>
-              <div className="max-h-28 space-y-2 overflow-auto">
-                {auditRows.length === 0 && <p className="text-[11px] text-[#334155]">No entries yet.</p>}
-                {auditRows.slice(0, 5).map((row) => (
-                  <div key={row.id} className="rounded border border-[#E2E8F0] p-2 text-[11px] text-[#1F2937]">
-                    <div className="font-medium text-[#1E3A8A]">{row.action}</div>
-                    <div>{new Date(row.createdAt).toLocaleString()}</div>
+              <div className="rounded-2xl border border-[#C7D2FE] bg-[#EEF2FF] p-3">
+                <p className="mb-2 text-xs font-semibold text-[#312E81]">Custom Role Builder</p>
+                <div className="space-y-2">
+                  <Input
+                    value={customWorkerName}
+                    onChange={(event) => setCustomWorkerName(event.target.value)}
+                    className="h-8 border-[#A5B4FC] bg-white text-xs text-[#0F172A]"
+                    placeholder="Custom role name"
+                  />
+                  <select
+                    value={customWorkerRole}
+                    onChange={(event) =>
+                      setCustomWorkerRole(event.target.value as NodeRole)
+                    }
+                    className="h-8 w-full rounded-lg border border-[#A5B4FC] bg-white px-2 text-xs text-[#0F172A]"
+                  >
+                    <option value="manager">Manager</option>
+                    <option value="programmer">Programmer</option>
+                    <option value="code">Code</option>
+                  </select>
+                  <Input
+                    value={customCapabilitiesText}
+                    onChange={(event) => setCustomCapabilitiesText(event.target.value)}
+                    className="h-8 border-[#A5B4FC] bg-white text-xs text-[#0F172A]"
+                    placeholder="Capabilities comma-separated"
+                  />
+                  <textarea
+                    value={customWorkerPrompt}
+                    onChange={(event) => setCustomWorkerPrompt(event.target.value)}
+                    rows={2}
+                    className="w-full rounded-lg border border-[#A5B4FC] bg-white px-2 py-1 text-xs text-[#0F172A] outline-none"
+                  />
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button
+                      size="sm"
+                      className="h-8 bg-[#2563EB] text-white hover:bg-[#1D4ED8]"
+                      onClick={() =>
+                        addFromLibrary({ mode: 'root', item: buildCustomItem() })
+                      }
+                    >
+                      <PlusCircle className="mr-1 h-3.5 w-3.5" />
+                      Add Root
+                    </Button>
+                    <Button
+                      size="sm"
+                      disabled={!selectedNodeId}
+                      className="h-8 bg-[#4338CA] text-white hover:bg-[#3730A3]"
+                      onClick={() =>
+                        addFromLibrary({ mode: 'child', item: buildCustomItem() })
+                      }
+                    >
+                      Add Child
+                    </Button>
                   </div>
-                ))}
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-[#E2E8F0] bg-white p-3">
+                <p className="mb-2 text-xs font-semibold text-[#1E293B]">Structure Controls</p>
+                <div className="grid grid-cols-3 gap-2">
+                  <Button
+                    size="sm"
+                    className="h-8 bg-[#2563EB] text-white hover:bg-[#1D4ED8]"
+                    onClick={() => applyMindMapLayout()}
+                  >
+                    Arrange
+                  </Button>
+                  <Button
+                    size="sm"
+                    disabled={!selectedNodeId}
+                    className="h-8 bg-[#7C3AED] text-white hover:bg-[#6D28D9]"
+                    onClick={toggleCollapseSelected}
+                  >
+                    {selectedNodeId && collapsedNodeIds.includes(selectedNodeId)
+                      ? 'Expand'
+                      : 'Collapse'}
+                  </Button>
+                  <Button
+                    size="sm"
+                    disabled={!selectedNodeId}
+                    className="h-8 bg-[#DC2626] text-white hover:bg-[#B91C1C]"
+                    onClick={deleteSelectedBranch}
+                  >
+                    Delete
+                  </Button>
+                </div>
+                <label className="mt-2 flex items-center justify-between text-[11px] text-[#334155]">
+                  Auto-connect dropped nodes
+                  <input
+                    type="checkbox"
+                    checked={autoConnectFromSelection}
+                    onChange={(event) =>
+                      setAutoConnectFromSelection(event.target.checked)
+                    }
+                  />
+                </label>
+              </div>
+            </aside>
+
+            <div
+              ref={flowWrapperRef}
+              className="rgb-wave-space relative h-[82vh] overflow-hidden rounded-3xl border border-[#E2E8F0]"
+              onDragOver={onCanvasDragOver}
+              onDrop={onCanvasDrop}
+            >
+              <ReactFlow
+                nodes={nodes}
+                edges={edges}
+                nodeTypes={nodeTypes}
+                onNodesChange={onNodesChange}
+                onEdgesChange={onEdgesChange}
+                onConnect={onConnect}
+                onNodeClick={(_, node) => setSelectedNodeId(node.id)}
+                onPaneClick={() => setSelectedNodeId(null)}
+                onInit={setFlowInstance}
+                fitView
+                proOptions={{ hideAttribution: true }}
+              >
+                <Background color="#C7D2FE" gap={20} />
+                <MiniMap
+                  pannable
+                  zoomable
+                  nodeStrokeWidth={2}
+                  nodeColor={(node) => {
+                    if (node.type === 'manager') return '#F59E0B'
+                    if (node.type === 'programmer') return '#7C3AED'
+                    return '#2563EB'
+                  }}
+                />
+                <Controls />
+              </ReactFlow>
+
+              <div className="pointer-events-none absolute left-4 top-4 rounded-lg border border-[#BFDBFE] bg-white/90 px-3 py-2 text-[11px] text-[#1E3A8A] shadow">
+                Drag cards from left. Connect handles to build any possible org/tool/function
+                structure.
+              </div>
+
+              <div className="absolute right-4 top-4 flex gap-2">
+                <Button
+                  size="sm"
+                  className="h-8 bg-white text-[#1E293B] shadow hover:bg-[#F8FAFC]"
+                  onClick={zoomIn}
+                >
+                  <ZoomIn className="mr-1 h-4 w-4" />
+                  In
+                </Button>
+                <Button
+                  size="sm"
+                  className="h-8 bg-white text-[#1E293B] shadow hover:bg-[#F8FAFC]"
+                  onClick={zoomOut}
+                >
+                  <ZoomOut className="mr-1 h-4 w-4" />
+                  Out
+                </Button>
+                <Button
+                  size="sm"
+                  className="h-8 bg-[#2563EB] text-white shadow hover:bg-[#1D4ED8]"
+                  onClick={fitView}
+                >
+                  Fit View
+                </Button>
               </div>
             </div>
+
+            <aside className="rgb-glow-card space-y-3 rounded-3xl p-4">
+              <div>
+                <h3 className="text-sm font-semibold text-[#0F172A]">Inspector</h3>
+                <p className="text-xs text-[#475569]">
+                  Tune selected node behavior, role, and function scope.
+                </p>
+              </div>
+
+              {!selectedNode && (
+                <div className="rounded-xl border border-dashed border-[#CBD5E1] bg-white p-3 text-xs text-[#64748B]">
+                  Select a node on the board to edit its mission, capabilities, and behavior.
+                </div>
+              )}
+
+              {selectedNode && (
+                <div className="space-y-2 rounded-xl border border-[#CBD5E1] bg-white p-3">
+                  <label className="text-[11px] text-[#334155]">Node label</label>
+                  <Input
+                    value={selectedNode.data.label}
+                    onChange={(event) =>
+                      patchNode(selectedNode.id, { label: event.target.value })
+                    }
+                    className="h-8 border-[#CBD5E1] bg-white text-xs text-[#0F172A]"
+                  />
+
+                  <label className="text-[11px] text-[#334155]">Worker type</label>
+                  <Input
+                    value={selectedNode.data.workerType || ''}
+                    onChange={(event) =>
+                      patchNode(selectedNode.id, { workerType: event.target.value })
+                    }
+                    className="h-8 border-[#CBD5E1] bg-white text-xs text-[#0F172A]"
+                  />
+
+                  <label className="text-[11px] text-[#334155]">Role</label>
+                  <select
+                    value={selectedNode.data.role}
+                    onChange={(event) => {
+                      const nextRole = event.target.value as NodeRole
+                      setNodes((prev) =>
+                        prev.map((node) =>
+                          node.id === selectedNode.id
+                            ? {
+                                ...node,
+                                type: nextRole,
+                                data: {
+                                  ...node.data,
+                                  role: nextRole,
+                                  codeSnippet:
+                                    nextRole === 'code'
+                                      ? node.data.codeSnippet || {
+                                          language: 'typescript',
+                                          content:
+                                            'export const runTask = () => "custom function output";\n',
+                                        }
+                                      : node.data.codeSnippet,
+                                },
+                              }
+                            : node
+                        )
+                      )
+                    }}
+                    className="h-8 w-full rounded-lg border border-[#CBD5E1] bg-white px-2 text-xs text-[#0F172A]"
+                  >
+                    <option value="manager">Manager</option>
+                    <option value="programmer">Programmer</option>
+                    <option value="code">Code</option>
+                  </select>
+
+                  <label className="text-[11px] text-[#334155]">Capabilities (comma)</label>
+                  <Input
+                    value={(selectedNode.data.capabilities || []).join(', ')}
+                    onChange={(event) =>
+                      patchNode(selectedNode.id, {
+                        capabilities: parseCapabilities(event.target.value),
+                      })
+                    }
+                    className="h-8 border-[#CBD5E1] bg-white text-xs text-[#0F172A]"
+                  />
+
+                  <label className="text-[11px] text-[#334155]">Mission prompt</label>
+                  <textarea
+                    value={selectedNode.data.prompt}
+                    onChange={(event) =>
+                      patchNode(selectedNode.id, { prompt: event.target.value })
+                    }
+                    rows={3}
+                    className="w-full rounded-lg border border-[#CBD5E1] bg-white px-2 py-1 text-xs text-[#0F172A] outline-none"
+                  />
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <label className="flex items-center justify-between rounded border border-[#CBD5E1] bg-[#F8FAFC] px-2 py-1 text-[11px] text-[#334155]">
+                      Error Check
+                      <input
+                        type="checkbox"
+                        checked={selectedNode.data.errorCheckEnabled}
+                        onChange={(event) =>
+                          patchNode(selectedNode.id, {
+                            errorCheckEnabled: event.target.checked,
+                          })
+                        }
+                      />
+                    </label>
+                    <select
+                      value={selectedNode.data.monitoring}
+                      onChange={(event) =>
+                        patchNode(selectedNode.id, {
+                          monitoring: event.target.value as WorkflowNodeData['monitoring'],
+                        })
+                      }
+                      className="h-8 rounded border border-[#CBD5E1] bg-[#F8FAFC] px-2 text-[11px] text-[#334155]"
+                    >
+                      <option value="none">No monitor</option>
+                      <option value="sentry">Sentry</option>
+                      <option value="newrelic">New Relic</option>
+                    </select>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2">
+                    <Button
+                      size="sm"
+                      className="h-8 bg-[#1D4ED8] text-white hover:bg-[#1E40AF]"
+                      onClick={duplicateSelectedNode}
+                    >
+                      Duplicate
+                    </Button>
+                    <Button
+                      size="sm"
+                      className="h-8 bg-[#7C3AED] text-white hover:bg-[#6D28D9]"
+                      onClick={toggleCollapseSelected}
+                    >
+                      {collapsedNodeIds.includes(selectedNode.id) ? 'Expand' : 'Collapse'}
+                    </Button>
+                    <Button
+                      size="sm"
+                      className="h-8 bg-[#DC2626] text-white hover:bg-[#B91C1C]"
+                      onClick={deleteSelectedBranch}
+                    >
+                      Delete
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              <div className="rounded-xl border border-[#BFDBFE] bg-[#EFF6FF] p-3">
+                <p className="mb-1 text-xs font-semibold text-[#1D4ED8]">Execution Output</p>
+                <pre className="max-h-24 overflow-auto whitespace-pre-wrap text-[11px] text-[#1F2937]">
+                  {runOutput || 'No execution yet.'}
+                </pre>
+              </div>
+
+              <div className="rounded-xl border border-[#C7D2FE] bg-[#EEF2FF] p-3">
+                <p className="mb-1 text-xs font-semibold text-[#4338CA]">Recent Audit</p>
+                <div className="max-h-28 space-y-2 overflow-auto">
+                  {auditRows.length === 0 && (
+                    <p className="text-[11px] text-[#475569]">No entries yet.</p>
+                  )}
+                  {auditRows.slice(0, 6).map((row) => (
+                    <div key={row.id} className="rounded border border-[#E2E8F0] bg-white p-2">
+                      <div className="text-[11px] font-medium text-[#1E3A8A]">{row.action}</div>
+                      <div className="text-[10px] text-[#475569]">
+                        {new Date(row.createdAt).toLocaleString()}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </aside>
           </div>
         </div>
       </div>

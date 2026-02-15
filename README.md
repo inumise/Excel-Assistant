@@ -1,4 +1,4 @@
-# Hyperplacity AI Workers (Pro)
+# Hyperplacity AI Workers (CEO Drawboard)
 
 Luxury AI automation suite built on Next.js + React Flow + Supabase-compatible backend.
 
@@ -6,14 +6,14 @@ Palette: `#1A1A1A` / `#FFD700` / `#C9A483`
 
 ## What is included
 
-- **Mind Map First UI** on `/` (and `/workers` alias)
-  - Left worker palette with graphics/icons
-  - Drag worker cards to map and connect agents visually
-  - Futuristic clean-white design with deep RGB pulse/wave visual outlines
-  - Manager / Programmer / Code nodes
-  - Corporate role templates: Excel assistant, PR writer, accountant, sales, HR, legal, support, marketing, security, devops, QA, finance, procurement, design
-  - Mind-map element builder (root / child / sibling branch actions)
-  - Auto-arrange layout, collapse/expand branches, delete subtrees
+- **CEO Drawboard UI** on `/` (and `/workers` alias)
+  - Top-line command bar + 2D drag-and-drop board
+  - Left role/tool/function library with icon cards
+  - Right inspector for node mission, capabilities, role, and controls
+  - Futuristic clean-white style with deep RGB pulse/wave motion
+  - Corporate role templates + universal custom role builder
+  - Build any org/tool/function structure with root/child/sibling/connect controls
+  - Auto-arrange layout, collapse/expand branches, duplicate/delete subtrees
   - Monaco code blocks with:
     - AI Program
     - Self-Change
