@@ -78,6 +78,27 @@ export interface Workflow {
   updatedAt: string
 }
 
+export interface WorkflowCommunicationEvent {
+  id: string
+  edgeId: string
+  source: string
+  target: string
+  dataType: EdgeDataType
+  message: string
+  createdAt: string
+}
+
+export interface MemoryRecord {
+  id: string
+  userId: string
+  workflowId?: string
+  namespace: string
+  key: string
+  value: unknown
+  createdAt: string
+  updatedAt: string
+}
+
 export interface AuditLogEntry {
   id: string
   userId: string

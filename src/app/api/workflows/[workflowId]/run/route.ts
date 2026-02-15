@@ -1,5 +1,11 @@
 import { NextResponse } from 'next/server'
-import { addAuditLog, getUserSettings, getWorkflowById } from '@/lib/server-store'
+import {
+  addAuditLog,
+  getUserSettings,
+  getWorkflowById,
+  listMemoryRecords,
+  upsertMemoryRecord,
+} from '@/lib/server-store'
 import { DEMO_USER_ID } from '@/lib/workflow-template'
 import { executeWorkflow } from '@/lib/workflow-engine'
 import { sendWhatsAppMessage } from '@/lib/whatsapp-service'
@@ -45,17 +51,55 @@ export async function POST(
     return NextResponse.json({ success: false, message: 'Workflow not found.' }, { status: 404 })
   }
 
+  const memoryRows = await listMemoryRecords({ userId, workflowId })
+  const memoryContext = memoryRows
+    .slice(0, 12)
+    .map((row) => `${row.namespace}/${row.key}: ${JSON.stringify(row.value)}`)
+    .join('\n')
+
   const result = await executeWorkflow({
     workflow,
     settings,
-    triggerText,
+    triggerText: memoryContext
+      ? `${triggerText}\n\nMemory Vault Context:\n${memoryContext}`
+      : triggerText,
   })
 
   await addAuditLog(userId, workflowId, 'workflow.run', {
     triggerText,
     success: result.success,
     nodeResults: result.nodeResults,
+    communicationCount: result.communications.length,
   })
+
+  await Promise.all([
+    upsertMemoryRecord({
+      userId,
+      workflowId,
+      namespace: 'runtime',
+      key: 'last_run',
+      value: {
+        success: result.success,
+        output: result.output,
+        communicationCount: result.communications.length,
+        at: new Date().toISOString(),
+      },
+    }),
+    ...result.nodeResults.map((nodeResult) =>
+      upsertMemoryRecord({
+        userId,
+        workflowId,
+        namespace: `node:${nodeResult.nodeId}`,
+        key: 'last_summary',
+        value: {
+          success: nodeResult.success,
+          summary: nodeResult.summary,
+          error: nodeResult.error || null,
+          output: nodeResult.output || null,
+        },
+      })
+    ),
+  ])
 
   const shouldNotify = body.notifyWhatsapp || settings.whatsappNumber
   if (shouldNotify && (body.whatsappNumber || settings.whatsappNumber)) {

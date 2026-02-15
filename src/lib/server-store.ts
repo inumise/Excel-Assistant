@@ -4,6 +4,7 @@ import crypto from 'node:crypto'
 import {
   AuditLogEntry,
   BugTrackRecord,
+  MemoryRecord,
   UserAISettings,
   WhatsAppSession,
   Workflow,
@@ -19,6 +20,7 @@ interface InMemoryStore {
   bugtracks: BugTrackRecord[]
   sessions: WhatsAppSession[]
   auditLogs: AuditLogEntry[]
+  memoryRecords: MemoryRecord[]
 }
 
 function getInMemoryStore(): InMemoryStore {
@@ -31,6 +33,7 @@ function getInMemoryStore(): InMemoryStore {
     bugtracks: [],
     sessions: [],
     auditLogs: [],
+    memoryRecords: [],
   }
 
   return globalStore.__hyperStore
@@ -46,6 +49,10 @@ function cloneWorkflow(workflow: Workflow): Workflow {
 
 function cloneSettings(settings: UserAISettings): UserAISettings {
   return JSON.parse(JSON.stringify(settings)) as UserAISettings
+}
+
+function cloneMemoryRecord(record: MemoryRecord): MemoryRecord {
+  return JSON.parse(JSON.stringify(record)) as MemoryRecord
 }
 
 export async function getUserSettings(userId: string): Promise<UserAISettings> {
@@ -380,4 +387,179 @@ export async function getWhatsAppSession(userId: string) {
 
   const store = getInMemoryStore()
   return store.sessions.find((item) => item.userId === effectiveUserId) || null
+}
+
+export async function upsertMemoryRecord(params: {
+  userId: string
+  workflowId?: string
+  namespace: string
+  key: string
+  value: unknown
+}) {
+  const normalizedUserId = getEffectiveUserId(params.userId)
+  const normalizedWorkflowId = params.workflowId?.trim() || ''
+  const namespace = params.namespace.trim().toLowerCase() || 'general'
+  const key = params.key.trim()
+  const now = new Date().toISOString()
+
+  if (!key) {
+    throw new Error('Memory key is required.')
+  }
+
+  const supabase = getServerSupabaseClient()
+  if (supabase) {
+    try {
+      const { error } = await supabase
+        .from('ai_memory')
+        .upsert(
+          {
+            id: crypto.randomUUID(),
+            user_id: normalizedUserId,
+            workflow_id: normalizedWorkflowId,
+            namespace,
+            key,
+            value: params.value,
+            created_at: now,
+            updated_at: now,
+          },
+          {
+            onConflict: 'user_id,workflow_id,namespace,key',
+          }
+        )
+      if (error) throw error
+    } catch {
+      // If table is not provisioned yet, fallback to in-memory.
+    }
+  }
+
+  const store = getInMemoryStore()
+  const existingIndex = store.memoryRecords.findIndex(
+    (entry) =>
+      entry.userId === normalizedUserId &&
+      (entry.workflowId || '') === normalizedWorkflowId &&
+      entry.namespace === namespace &&
+      entry.key === key
+  )
+
+  if (existingIndex >= 0) {
+    store.memoryRecords[existingIndex] = {
+      ...store.memoryRecords[existingIndex],
+      value: params.value,
+      updatedAt: now,
+    }
+    return cloneMemoryRecord(store.memoryRecords[existingIndex])
+  }
+
+  const created: MemoryRecord = {
+    id: crypto.randomUUID(),
+    userId: normalizedUserId,
+    workflowId: normalizedWorkflowId || undefined,
+    namespace,
+    key,
+    value: params.value,
+    createdAt: now,
+    updatedAt: now,
+  }
+  store.memoryRecords.unshift(created)
+  return cloneMemoryRecord(created)
+}
+
+export async function listMemoryRecords(params: {
+  userId: string
+  workflowId?: string
+  namespace?: string
+  key?: string
+}) {
+  const normalizedUserId = getEffectiveUserId(params.userId)
+  const normalizedWorkflowId = params.workflowId?.trim() || ''
+  const namespace = params.namespace?.trim().toLowerCase()
+  const key = params.key?.trim()
+
+  const supabase = getServerSupabaseClient()
+  if (supabase) {
+    try {
+      let query = supabase
+        .from('ai_memory')
+        .select('id, user_id, workflow_id, namespace, key, value, created_at, updated_at')
+        .eq('user_id', normalizedUserId)
+        .order('updated_at', { ascending: false })
+        .limit(200)
+
+      if (normalizedWorkflowId) query = query.eq('workflow_id', normalizedWorkflowId)
+      if (namespace) query = query.eq('namespace', namespace)
+      if (key) query = query.eq('key', key)
+
+      const { data, error } = await query
+      if (error) throw error
+      if (data) {
+        return data.map((row) => ({
+          id: row.id,
+          userId: row.user_id,
+          workflowId: row.workflow_id || undefined,
+          namespace: row.namespace,
+          key: row.key,
+          value: row.value,
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
+        }))
+      }
+    } catch {
+      // Table missing or unavailable; fallback to in-memory records.
+    }
+  }
+
+  const store = getInMemoryStore()
+  return store.memoryRecords
+    .filter((entry) => entry.userId === normalizedUserId)
+    .filter((entry) => (normalizedWorkflowId ? (entry.workflowId || '') === normalizedWorkflowId : true))
+    .filter((entry) => (namespace ? entry.namespace === namespace : true))
+    .filter((entry) => (key ? entry.key === key : true))
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+    .map(cloneMemoryRecord)
+}
+
+export async function deleteMemoryRecord(params: {
+  userId: string
+  workflowId?: string
+  namespace: string
+  key: string
+}) {
+  const normalizedUserId = getEffectiveUserId(params.userId)
+  const normalizedWorkflowId = params.workflowId?.trim() || ''
+  const namespace = params.namespace.trim().toLowerCase()
+  const key = params.key.trim()
+
+  if (!key) {
+    throw new Error('Memory key is required.')
+  }
+
+  const supabase = getServerSupabaseClient()
+  if (supabase) {
+    try {
+      let query = supabase
+        .from('ai_memory')
+        .delete()
+        .eq('user_id', normalizedUserId)
+        .eq('namespace', namespace)
+        .eq('key', key)
+
+      if (normalizedWorkflowId) query = query.eq('workflow_id', normalizedWorkflowId)
+      const { error } = await query
+      if (error) throw error
+    } catch {
+      // Ignore and apply in-memory deletion fallback below.
+    }
+  }
+
+  const store = getInMemoryStore()
+  const before = store.memoryRecords.length
+  store.memoryRecords = store.memoryRecords.filter((entry) => {
+    if (entry.userId !== normalizedUserId) return true
+    if ((entry.workflowId || '') !== normalizedWorkflowId) return true
+    if (entry.namespace !== namespace) return true
+    if (entry.key !== key) return true
+    return false
+  })
+
+  return { deleted: before - store.memoryRecords.length }
 }

@@ -13,5 +13,7 @@ describe('executeWorkflow', () => {
 
     expect(result.nodeResults.length).toBeGreaterThan(0)
     expect(result.output).toContain('manager-1')
+    expect(result.communications.length).toBeGreaterThan(0)
+    expect(result.communications.some((event) => event.edgeId.startsWith('edge-'))).toBe(true)
   })
 })

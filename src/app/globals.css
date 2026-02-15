@@ -70,6 +70,15 @@ body {
   }
 }
 
+@keyframes edgeSignalTravel {
+  0% {
+    stroke-dashoffset: 18;
+  }
+  100% {
+    stroke-dashoffset: -18;
+  }
+}
+
 .rgb-glow-card {
   position: relative;
   isolation: isolate;
@@ -133,4 +142,9 @@ body {
   background: white !important;
   color: #0f172a !important;
   border-color: #cbd5e1 !important;
+}
+
+.react-flow__edge.edge-pulse-signal .react-flow__edge-path {
+  animation: edgeSignalTravel 0.7s linear infinite;
+  stroke-linecap: round;
 }

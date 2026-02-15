@@ -20,6 +20,8 @@ Palette: `#1A1A1A` / `#FFD700` / `#C9A483`
     - Delegate
     - Bugtrack & Fix
   - Typed edge colors (API blue, Code green, AI purple)
+  - Live communication pulse animation on connected edges during workflow runs
+  - Lightweight “Signal XP” game-style counters (subtle, non-intrusive)
   - Hierarchical node layout compatible with nested maps
 - **AI Manager Settings** on `/settings`
   - OpenAI / Claude / Gemini key fields
@@ -38,6 +40,10 @@ Palette: `#1A1A1A` / `#FFD700` / `#C9A483`
     - Fix bug -> Test -> if fail, escalate to Manager
 - **Audit log**
   - `/api/audit` + server storage hooks
+- **Memory Vault (simple AI database)**
+  - `/api/memory` for storing/retrieving worker context by namespace/key
+  - Right-side “Memory Vault” panel for quick write/read/delete
+  - Runtime stores latest run + node summaries for reuse in prompts/tools
 
 ## Demo template
 
@@ -51,7 +57,8 @@ Flow:
 
 Migration:
 
-`supabase/migrations/202602150001_hyperplacity_pro.sql`
+- `supabase/migrations/202602150001_hyperplacity_pro.sql`
+- `supabase/migrations/202602150002_ai_memory.sql`
 
 Includes:
 
@@ -61,6 +68,7 @@ Includes:
 - `bugtracks`
 - `whatsapp_sessions` (`user_id`, `session_data`)
 - `audit_log`
+- `ai_memory` (lightweight key/value JSON store per workflow)
 
 RLS policies ensure users only access their own keys/sessions/workflows.
 

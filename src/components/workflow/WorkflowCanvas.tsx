@@ -28,11 +28,13 @@ import ReactFlow, {
 } from 'reactflow'
 import 'reactflow/dist/style.css'
 import {
+  Activity,
   BadgeDollarSign,
   BarChart3,
   BriefcaseBusiness,
   Calculator,
   Code2,
+  Database,
   FileSpreadsheet,
   Handshake,
   Headset,
@@ -65,8 +67,10 @@ import {
 } from '@/lib/mind-map-layout'
 import {
   EdgeDataType,
+  MemoryRecord,
   NodeRole,
   Workflow,
+  WorkflowCommunicationEvent,
   WorkflowEdge,
   WorkflowNodeData,
 } from '@/types/workflow'
@@ -88,6 +92,12 @@ interface LibraryItem {
   edgeType: EdgeDataType
   defaultPrompt: string
   defaultCapabilities: string[]
+}
+
+interface RunWorkflowResponse {
+  output?: string
+  message?: string
+  communications?: WorkflowCommunicationEvent[]
 }
 
 const edgePalette: Record<EdgeDataType, string> = {
@@ -311,21 +321,35 @@ function getEdgeStyle(edge: WorkflowEdge | Edge) {
   const dataType = (edgeDataType || 'ai') as EdgeDataType
   const existingData =
     'data' in edge ? ((edge as Edge).data as Record<string, unknown> | undefined) : undefined
+  const isPulsing = Boolean(existingData?.isPulsing)
+  const strokeColor = isPulsing ? '#F97316' : edgePalette[dataType]
 
   return {
     ...edge,
-    animated: dataType === 'ai',
+    animated: dataType === 'ai' || isPulsing,
     label: edge.label || dataType.toUpperCase(),
+    className: isPulsing ? 'edge-pulse-signal' : undefined,
     style: {
-      stroke: edgePalette[dataType],
-      strokeWidth: 2.4,
+      stroke: strokeColor,
+      strokeWidth: isPulsing ? 3.6 : 2.4,
+      strokeDasharray: isPulsing ? '8 6' : undefined,
+      filter: isPulsing ? 'drop-shadow(0 0 6px rgba(249, 115, 22, 0.65))' : undefined,
     },
     markerEnd: {
       type: 'arrowclosed',
-      color: edgePalette[dataType],
+      color: strokeColor,
     },
-    data: { ...(existingData || {}), dataType },
+    data: { ...(existingData || {}), dataType, isPulsing },
   } as Edge
+}
+
+function formatMemoryValue(value: unknown) {
+  if (typeof value === 'string') return value
+  try {
+    return JSON.stringify(value)
+  } catch {
+    return String(value)
+  }
 }
 
 function NodeShell({
@@ -499,9 +523,19 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
   const toastIdRef = useRef(0)
   const [isSaving, setIsSaving] = useState(false)
   const [isRunning, setIsRunning] = useState(false)
+  const [signalScore, setSignalScore] = useState(0)
+  const [activeSignalCount, setActiveSignalCount] = useState(0)
+  const [lastSignalAt, setLastSignalAt] = useState<string | null>(null)
+  const [memoryRecords, setMemoryRecords] = useState<MemoryRecord[]>([])
+  const [memoryNamespace, setMemoryNamespace] = useState('general')
+  const [memoryKey, setMemoryKey] = useState('')
+  const [memoryValue, setMemoryValue] = useState('')
+  const [isMemoryLoading, setIsMemoryLoading] = useState(false)
+  const [isMemorySaving, setIsMemorySaving] = useState(false)
 
   const [flowInstance, setFlowInstance] = useState<ReactFlowInstance | null>(null)
   const flowWrapperRef = useRef<HTMLDivElement | null>(null)
+  const pulseTimersRef = useRef<Array<ReturnType<typeof setTimeout>>>([])
 
   const [nodes, setNodes, onNodesChange] = useNodesState<FlowNodeData>([])
   const [edges, setEdges, onEdgesChange] = useEdgesState([])
@@ -535,6 +569,69 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
     []
   )
 
+  const clearSignalTimers = useCallback(() => {
+    pulseTimersRef.current.forEach((timer) => clearTimeout(timer))
+    pulseTimersRef.current = []
+    setActiveSignalCount(0)
+    setEdges((prev) =>
+      prev.map((edge) => {
+        const data = (edge.data as Record<string, unknown> | undefined) || {}
+        if (!data.isPulsing) return edge
+        return getEdgeStyle({
+          ...edge,
+          data: { ...data, isPulsing: false },
+        } as Edge)
+      })
+    )
+  }, [setEdges])
+
+  const playCommunicationSignals = useCallback(
+    (communications: WorkflowCommunicationEvent[]) => {
+      if (communications.length === 0) return
+
+      clearSignalTimers()
+      setSignalScore((prev) => prev + communications.length)
+      setActiveSignalCount(communications.length)
+      setLastSignalAt(new Date().toISOString())
+
+      communications.slice(0, 120).forEach((communication, index) => {
+        const activateTimer = setTimeout(() => {
+          setEdges((prev) =>
+            prev.map((edge) => {
+              if (edge.id !== communication.edgeId) return edge
+              const data = (edge.data as Record<string, unknown> | undefined) || {}
+              return getEdgeStyle({
+                ...edge,
+                data: { ...data, dataType: communication.dataType, isPulsing: true },
+              } as Edge)
+            })
+          )
+        }, index * 170)
+
+        const deactivateTimer = setTimeout(() => {
+          setEdges((prev) =>
+            prev.map((edge) => {
+              if (edge.id !== communication.edgeId) return edge
+              const data = (edge.data as Record<string, unknown> | undefined) || {}
+              return getEdgeStyle({
+                ...edge,
+                data: { ...data, dataType: communication.dataType, isPulsing: false },
+              } as Edge)
+            })
+          )
+        }, index * 170 + 860)
+
+        pulseTimersRef.current.push(activateTimer, deactivateTimer)
+      })
+
+      const cooldownTimer = setTimeout(() => {
+        setActiveSignalCount(0)
+      }, communications.length * 170 + 900)
+      pulseTimersRef.current.push(cooldownTimer)
+    },
+    [clearSignalTimers, setEdges]
+  )
+
   const patchNode = useCallback(
     (nodeId: string, patch: Partial<WorkflowNodeData>) => {
       setIsDirty(true)
@@ -557,6 +654,7 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
 
   const hydrateWorkflow = useCallback(
     (workflow: Workflow) => {
+      clearSignalTimers()
       const hydratedNodes: Node<FlowNodeData>[] = workflow.nodes.map((node) => ({
         ...node,
         type: node.type === 'group' ? 'manager' : node.type,
@@ -576,7 +674,7 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
       setIsDirty(false)
       setLastSavedAt(workflow.updatedAt)
     },
-    [patchNode, setEdges, setNodes, userId]
+    [clearSignalTimers, patchNode, setEdges, setNodes, userId]
   )
 
   const fetchWorkflows = useCallback(async () => {
@@ -618,13 +716,115 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
     }
   }, [activeWorkflowId, userId])
 
+  const fetchMemory = useCallback(async () => {
+    if (!activeWorkflowId) {
+      setMemoryRecords([])
+      return
+    }
+    setIsMemoryLoading(true)
+    try {
+      const response = await fetch(
+        `/api/memory?userId=${encodeURIComponent(userId)}&workflowId=${encodeURIComponent(activeWorkflowId)}`
+      )
+      if (!response.ok) {
+        throw new Error(`Failed to load memory (${response.status})`)
+      }
+      const data = await response.json()
+      setMemoryRecords((data.records || []) as MemoryRecord[])
+    } catch {
+      setMemoryRecords([])
+    } finally {
+      setIsMemoryLoading(false)
+    }
+  }, [activeWorkflowId, userId])
+
+  const saveMemoryRecord = useCallback(async () => {
+    if (!activeWorkflowId) return
+    const key = memoryKey.trim()
+    if (!key) {
+      pushToast('Memory key is required.', 'error')
+      return
+    }
+    setIsMemorySaving(true)
+    try {
+      const payloadValue = (() => {
+        const trimmed = memoryValue.trim()
+        if (!trimmed) return ''
+        try {
+          return JSON.parse(trimmed)
+        } catch {
+          return memoryValue
+        }
+      })()
+
+      const response = await fetch('/api/memory', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId,
+          workflowId: activeWorkflowId,
+          namespace: memoryNamespace || 'general',
+          key,
+          value: payloadValue,
+        }),
+      })
+      const data = await response.json()
+      if (!response.ok) {
+        throw new Error(data.message || `Memory save failed (${response.status})`)
+      }
+      pushToast('Memory vault updated.', 'success')
+      setMemoryKey('')
+      setMemoryValue('')
+      await fetchMemory()
+    } catch (error) {
+      pushToast(error instanceof Error ? error.message : 'Unable to save memory.', 'error')
+    } finally {
+      setIsMemorySaving(false)
+    }
+  }, [activeWorkflowId, fetchMemory, memoryKey, memoryNamespace, memoryValue, pushToast, userId])
+
+  const deleteMemoryVaultEntry = useCallback(
+    async (namespace: string, key: string) => {
+      if (!activeWorkflowId) return
+      try {
+        const response = await fetch('/api/memory', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId,
+            workflowId: activeWorkflowId,
+            namespace,
+            key,
+          }),
+        })
+        if (!response.ok) {
+          throw new Error(`Memory delete failed (${response.status})`)
+        }
+        await fetchMemory()
+      } catch (error) {
+        pushToast(error instanceof Error ? error.message : 'Unable to delete memory.', 'error')
+      }
+    },
+    [activeWorkflowId, fetchMemory, pushToast, userId]
+  )
+
   useEffect(() => {
     fetchWorkflows()
   }, [fetchWorkflows])
 
   useEffect(() => {
+    return () => {
+      clearSignalTimers()
+    }
+  }, [clearSignalTimers])
+
+  useEffect(() => {
     fetchAudit()
   }, [fetchAudit, runOutput])
+
+  useEffect(() => {
+    fetchMemory()
+  }, [fetchMemory])
 
   const applyMindMapLayout = useCallback(
     (rootId?: string) => {
@@ -1039,12 +1239,18 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
           notifyWhatsapp: true,
         }),
       })
-      const data = await response.json()
+      const data = (await response.json()) as RunWorkflowResponse
       if (!response.ok) {
         throw new Error(data.message || `Run failed (${response.status})`)
       }
+      const communications = Array.isArray(data.communications) ? data.communications : []
       setRunOutput(data.output || data.message || 'No output')
+      playCommunicationSignals(communications)
+      await fetchMemory()
       pushToast('Workflow run completed.', 'success')
+      if (communications.length > 0) {
+        pushToast(`Signal burst: ${communications.length} edge pulse(s)`, 'info')
+      }
     } catch (error) {
       setRunOutput(error instanceof Error ? error.message : 'Workflow execution failed.')
       pushToast(
@@ -1054,7 +1260,7 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
     } finally {
       setIsRunning(false)
     }
-  }, [activeWorkflow, pushToast, runInput, userId])
+  }, [activeWorkflow, fetchMemory, playCommunicationSignals, pushToast, runInput, userId])
 
   useEffect(() => {
     if (!autosaveEnabled || !isDirty || !activeWorkflow || isSaving) return
@@ -1154,6 +1360,15 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
             <div className="rounded-lg border border-[#CBD5E1] bg-white px-2 py-1 text-[11px] text-[#334155]">
               {isDirty ? 'Unsaved changes' : 'Synced'}
               {lastSavedAt ? ` • ${new Date(lastSavedAt).toLocaleTimeString()}` : ''}
+            </div>
+
+            <div className="rounded-lg border border-[#FCD34D] bg-[#FFFBEB] px-2 py-1 text-[11px] text-[#92400E]">
+              Signal XP: {signalScore}
+            </div>
+
+            <div className="rounded-lg border border-[#BFDBFE] bg-[#EFF6FF] px-2 py-1 text-[11px] text-[#1D4ED8]">
+              {activeSignalCount > 0 ? `Pulse Burst: ${activeSignalCount}` : 'Comms Idle'}
+              {lastSignalAt ? ` • ${new Date(lastSignalAt).toLocaleTimeString()}` : ''}
             </div>
 
             <label className="inline-flex items-center gap-1 rounded-lg border border-[#CBD5E1] bg-white px-2 py-1 text-[11px] text-[#334155]">
@@ -1443,6 +1658,15 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
                 structure.
               </div>
 
+              <div className="pointer-events-none absolute bottom-4 left-4 rounded-lg border border-[#FDBA74] bg-[#FFF7ED]/90 px-3 py-2 text-[11px] text-[#9A3412] shadow">
+                <span className="inline-flex items-center gap-1">
+                  <Activity className="h-3.5 w-3.5" />
+                  {activeSignalCount > 0
+                    ? `${activeSignalCount} live communication pulse(s)`
+                    : 'Signal lane waiting for next run'}
+                </span>
+              </div>
+
               <div className="absolute right-4 top-4 flex gap-2">
                 <Button
                   size="sm"
@@ -1623,6 +1847,94 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
                 <pre className="max-h-24 overflow-auto whitespace-pre-wrap text-[11px] text-[#1F2937]">
                   {runOutput || 'No execution yet.'}
                 </pre>
+              </div>
+
+              <div className="rounded-xl border border-[#D1FAE5] bg-[#ECFDF5] p-3">
+                <div className="mb-2 flex items-center justify-between">
+                  <p className="text-xs font-semibold text-[#065F46]">Memory Vault</p>
+                  <span className="inline-flex items-center gap-1 text-[10px] text-[#047857]">
+                    <Database className="h-3.5 w-3.5" />
+                    {memoryRecords.length} entries
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <Input
+                    value={memoryNamespace}
+                    onChange={(event) => setMemoryNamespace(event.target.value)}
+                    className="h-8 border-[#6EE7B7] bg-white text-xs text-[#064E3B]"
+                    placeholder="namespace"
+                  />
+                  <Input
+                    value={memoryKey}
+                    onChange={(event) => setMemoryKey(event.target.value)}
+                    className="h-8 border-[#6EE7B7] bg-white text-xs text-[#064E3B]"
+                    placeholder="key"
+                  />
+                </div>
+
+                <textarea
+                  value={memoryValue}
+                  onChange={(event) => setMemoryValue(event.target.value)}
+                  rows={2}
+                  className="mt-2 w-full rounded-lg border border-[#6EE7B7] bg-white px-2 py-1 text-xs text-[#064E3B] outline-none"
+                  placeholder='value (text or JSON, e.g. {"budget":12000})'
+                />
+
+                <div className="mt-2 flex gap-2">
+                  <Button
+                    size="sm"
+                    className="h-8 bg-[#059669] text-white hover:bg-[#047857]"
+                    onClick={saveMemoryRecord}
+                    disabled={isMemorySaving || !activeWorkflowId}
+                  >
+                    {isMemorySaving ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : null}
+                    Store
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="h-8 bg-white text-[#065F46] hover:bg-[#F0FDF4]"
+                    onClick={fetchMemory}
+                    disabled={isMemoryLoading || !activeWorkflowId}
+                  >
+                    Refresh
+                  </Button>
+                </div>
+
+                <div className="mt-2 max-h-32 space-y-2 overflow-auto pr-1">
+                  {isMemoryLoading && (
+                    <p className="text-[11px] text-[#047857]">Loading memory...</p>
+                  )}
+                  {!isMemoryLoading && memoryRecords.length === 0 && (
+                    <p className="text-[11px] text-[#047857]">
+                      No memory yet. Store state for workers and manager prompts.
+                    </p>
+                  )}
+                  {memoryRecords.slice(0, 10).map((record) => (
+                    <div
+                      key={record.id}
+                      className="rounded border border-[#A7F3D0] bg-white p-2 text-[10px] text-[#065F46]"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-semibold">
+                          {record.namespace}/{record.key}
+                        </span>
+                        <button
+                          type="button"
+                          className="rounded border border-[#A7F3D0] px-1.5 py-0.5 text-[10px] text-[#065F46] hover:bg-[#ECFDF5]"
+                          onClick={() =>
+                            deleteMemoryVaultEntry(record.namespace, record.key)
+                          }
+                        >
+                          delete
+                        </button>
+                      </div>
+                      <p className="mt-1 break-all text-[#047857]">
+                        {formatMemoryValue(record.value)}
+                      </p>
+                    </div>
+                  ))}
+                </div>
               </div>
 
               <div className="rounded-xl border border-[#C7D2FE] bg-[#EEF2FF] p-3">
