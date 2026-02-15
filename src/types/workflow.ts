@@ -36,6 +36,7 @@ export interface CodeSnippet {
 export interface WorkflowNodeData {
   label: string
   role: NodeRole
+  workerType?: string
   prompt: string
   codeSnippet?: CodeSnippet
   testsPassed?: boolean

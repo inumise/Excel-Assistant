@@ -6,9 +6,11 @@ Palette: `#1A1A1A` / `#FFD700` / `#C9A483`
 
 ## What is included
 
-- **Legacy Excel AI Assistant** preserved on `/` and `/excel`
-- **Workflow Studio** on `/workers`
+- **Mind Map First UI** on `/` (and `/workers` alias)
+  - Left worker palette with graphics/icons
+  - Drag worker cards to map and connect agents visually
   - Manager / Programmer / Code nodes
+  - Corporate role templates: Excel assistant, PR writer, accountant, sales, HR, legal, support, marketing, security, devops, QA, finance, procurement, design
   - Mind-map element builder (root / child / sibling branch actions)
   - Auto-arrange layout, collapse/expand branches, delete subtrees
   - Monaco code blocks with:
@@ -69,7 +71,7 @@ npm run dev
 
 Open:
 
-- `http://localhost:3000/` (legacy Excel assistant)
+- `http://localhost:3000/` (mind map workspace)
 - `http://localhost:3000/workers`
 - `http://localhost:3000/settings`
 - `http://localhost:3000/bugtracker/workflow-web-design-factory`

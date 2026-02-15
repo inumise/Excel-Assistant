@@ -35,15 +35,9 @@ export default function RootLayout({
               <nav className="flex items-center gap-2 text-xs">
                 <Link
                   href="/"
-                  className="rounded-md border border-[#C9A483]/30 px-3 py-1.5 text-[#EBDCC8] hover:bg-[#1A1A1A]"
-                >
-                  Excel
-                </Link>
-                <Link
-                  href="/workers"
                   className="rounded-md border border-[#FFD700]/40 px-3 py-1.5 text-[#FFD700] hover:bg-[#2A240A]"
                 >
-                  Workflow Studio
+                  Mind Map
                 </Link>
                 <Link
                   href="/settings"

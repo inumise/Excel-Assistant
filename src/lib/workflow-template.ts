@@ -37,6 +37,7 @@ export function createWebDesignFactoryTemplate(userId: string = DEMO_USER_ID): W
         data: {
           label: 'Manager AI: Luxury Factory Orchestrator',
           role: 'manager',
+          workerType: 'Manager AI',
           prompt:
             'Break work into sub-tasks, delegate to programmer nodes, and escalate on repeated test failures.',
           testsPassed: true,
@@ -55,6 +56,7 @@ export function createWebDesignFactoryTemplate(userId: string = DEMO_USER_ID): W
         data: {
           label: 'Programmer AI: Site Generator',
           role: 'programmer',
+          workerType: 'Programmer AI',
           prompt: 'Generate hero sections, nav, and polished interaction logic.',
           testsPassed: true,
           bugStatus: 'idle',
@@ -72,6 +74,7 @@ export function createWebDesignFactoryTemplate(userId: string = DEMO_USER_ID): W
         data: {
           label: 'Code Block: Luxury Landing Page',
           role: 'code',
+          workerType: 'Code Node',
           prompt: 'Build a premium landing page with dark/gold palette.',
           codeSnippet: {
             language: 'typescript',
