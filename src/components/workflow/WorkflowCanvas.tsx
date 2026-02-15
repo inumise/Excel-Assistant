@@ -14,9 +14,11 @@ import ReactFlow, {
   Connection,
   Controls,
   Edge,
+  EdgeChange,
   Handle,
   MiniMap,
   Node,
+  NodeChange,
   NodeProps,
   Position,
   ReactFlowInstance,
@@ -488,6 +490,13 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
   const [auditRows, setAuditRows] = useState<
     Array<{ id: string; action: string; createdAt: string; payload: Record<string, unknown> }>
   >([])
+  const [isDirty, setIsDirty] = useState(false)
+  const [autosaveEnabled, setAutosaveEnabled] = useState(true)
+  const [lastSavedAt, setLastSavedAt] = useState<string | null>(null)
+  const [toasts, setToasts] = useState<
+    Array<{ id: number; type: 'success' | 'error' | 'info'; message: string }>
+  >([])
+  const toastIdRef = useRef(0)
   const [isSaving, setIsSaving] = useState(false)
   const [isRunning, setIsRunning] = useState(false)
 
@@ -515,8 +524,20 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
     )
   }, [librarySearch])
 
+  const pushToast = useCallback(
+    (message: string, type: 'success' | 'error' | 'info' = 'info') => {
+      const id = ++toastIdRef.current
+      setToasts((prev) => [...prev, { id, type, message }].slice(-4))
+      setTimeout(() => {
+        setToasts((prev) => prev.filter((toast) => toast.id !== id))
+      }, 3600)
+    },
+    []
+  )
+
   const patchNode = useCallback(
     (nodeId: string, patch: Partial<WorkflowNodeData>) => {
+      setIsDirty(true)
       setNodes((prev) =>
         prev.map((node) =>
           node.id === nodeId
@@ -552,6 +573,8 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
       setActiveWorkflowId(workflow.id)
       setCollapsedNodeIds([])
       setSelectedNodeId(null)
+      setIsDirty(false)
+      setLastSavedAt(workflow.updatedAt)
     },
     [patchNode, setEdges, setNodes, userId]
   )
@@ -560,24 +583,39 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
     setLoading(true)
     try {
       const response = await fetch(`/api/workflows?userId=${encodeURIComponent(userId)}`)
+      if (!response.ok) {
+        throw new Error(`Failed to load workflows (${response.status})`)
+      }
       const data = await response.json()
       const fetched = (data.workflows || []) as Workflow[]
       setWorkflows(fetched)
       if (fetched[0]) {
         hydrateWorkflow(fetched[0])
       }
+    } catch (error) {
+      pushToast(
+        error instanceof Error ? error.message : 'Failed to load workflows.',
+        'error'
+      )
     } finally {
       setLoading(false)
     }
-  }, [hydrateWorkflow, userId])
+  }, [hydrateWorkflow, pushToast, userId])
 
   const fetchAudit = useCallback(async () => {
     if (!activeWorkflowId) return
-    const response = await fetch(
-      `/api/audit?userId=${encodeURIComponent(userId)}&workflowId=${encodeURIComponent(activeWorkflowId)}`
-    )
-    const data = await response.json()
-    setAuditRows(data.entries || [])
+    try {
+      const response = await fetch(
+        `/api/audit?userId=${encodeURIComponent(userId)}&workflowId=${encodeURIComponent(activeWorkflowId)}`
+      )
+      if (!response.ok) {
+        throw new Error(`Failed to load audit (${response.status})`)
+      }
+      const data = await response.json()
+      setAuditRows(data.entries || [])
+    } catch {
+      setAuditRows([])
+    }
   }, [activeWorkflowId, userId])
 
   useEffect(() => {
@@ -618,6 +656,7 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
           }
         })
       )
+      setIsDirty(true)
     },
     [edges, nodes, selectedNodeId, setNodes]
   )
@@ -743,6 +782,7 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
       }
 
       setSelectedNodeId(id)
+      setIsDirty(true)
       if (params.mode !== 'drop') {
         const rootHint = params.mode === 'root' ? id : parentId || undefined
         setTimeout(() => applyMindMapLayout(rootHint), 0)
@@ -761,6 +801,22 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
     ]
   )
 
+  const handleNodesChange = useCallback(
+    (changes: NodeChange[]) => {
+      onNodesChange(changes)
+      setIsDirty(true)
+    },
+    [onNodesChange]
+  )
+
+  const handleEdgesChange = useCallback(
+    (changes: EdgeChange[]) => {
+      onEdgesChange(changes)
+      setIsDirty(true)
+    },
+    [onEdgesChange]
+  )
+
   const onConnect = useCallback(
     (connection: Connection) => {
       setEdges((prev) =>
@@ -775,6 +831,7 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
           prev
         )
       )
+      setIsDirty(true)
     },
     [connectType, setEdges]
   )
@@ -843,6 +900,7 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
       prev.filter((nodeId) => !descendantIds.has(nodeId))
     )
     setSelectedNodeId(null)
+    setIsDirty(true)
   }, [edges, selectedNodeId, setEdges, setNodes])
 
   const duplicateSelectedNode = useCallback(() => {
@@ -876,6 +934,7 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
       ])
     }
     setSelectedNodeId(cloneId)
+    setIsDirty(true)
   }, [autoConnectFromSelection, connectType, selectedNode, setEdges, setNodes])
 
   useEffect(() => {
@@ -926,24 +985,46 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
     flowInstance?.zoomOut({ duration: 220 })
   }, [flowInstance])
 
+  const persistWorkflow = useCallback(
+    async (silent = false) => {
+      if (!activeWorkflow) return false
+      setIsSaving(true)
+      try {
+        const workflow = toSerializableWorkflow({ workflow: activeWorkflow, nodes, edges })
+        const response = await fetch('/api/workflows', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(workflow),
+        })
+        if (!response.ok) {
+          throw new Error(`Save failed (${response.status})`)
+        }
+        const data = await response.json()
+        const saved = data.workflow as Workflow
+        setWorkflows((prev) => prev.map((item) => (item.id === saved.id ? saved : item)))
+        hydrateWorkflow(saved)
+        setIsDirty(false)
+        setLastSavedAt(new Date().toISOString())
+        if (!silent) pushToast('Workflow saved.', 'success')
+        return true
+      } catch (error) {
+        if (!silent) {
+          pushToast(
+            error instanceof Error ? error.message : 'Unable to save workflow.',
+            'error'
+          )
+        }
+        return false
+      } finally {
+        setIsSaving(false)
+      }
+    },
+    [activeWorkflow, edges, hydrateWorkflow, nodes, pushToast]
+  )
+
   const saveWorkflow = useCallback(async () => {
-    if (!activeWorkflow) return
-    setIsSaving(true)
-    try {
-      const workflow = toSerializableWorkflow({ workflow: activeWorkflow, nodes, edges })
-      const response = await fetch('/api/workflows', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(workflow),
-      })
-      const data = await response.json()
-      const saved = data.workflow as Workflow
-      setWorkflows((prev) => prev.map((item) => (item.id === saved.id ? saved : item)))
-      hydrateWorkflow(saved)
-    } finally {
-      setIsSaving(false)
-    }
-  }, [activeWorkflow, edges, hydrateWorkflow, nodes])
+    await persistWorkflow(false)
+  }, [persistWorkflow])
 
   const runWorkflow = useCallback(async () => {
     if (!activeWorkflow) return
@@ -959,11 +1040,98 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
         }),
       })
       const data = await response.json()
+      if (!response.ok) {
+        throw new Error(data.message || `Run failed (${response.status})`)
+      }
       setRunOutput(data.output || data.message || 'No output')
+      pushToast('Workflow run completed.', 'success')
+    } catch (error) {
+      setRunOutput(error instanceof Error ? error.message : 'Workflow execution failed.')
+      pushToast(
+        error instanceof Error ? error.message : 'Workflow execution failed.',
+        'error'
+      )
     } finally {
       setIsRunning(false)
     }
-  }, [activeWorkflow, runInput, userId])
+  }, [activeWorkflow, pushToast, runInput, userId])
+
+  useEffect(() => {
+    if (!autosaveEnabled || !isDirty || !activeWorkflow || isSaving) return
+    const timer = setTimeout(() => {
+      void persistWorkflow(true)
+    }, 4500)
+    return () => clearTimeout(timer)
+  }, [activeWorkflow, autosaveEnabled, isDirty, isSaving, persistWorkflow])
+
+  useEffect(() => {
+    const isEditableTarget = (target: EventTarget | null) => {
+      if (!(target instanceof HTMLElement)) return false
+      if (target.isContentEditable) return true
+      const tag = target.tagName.toLowerCase()
+      return tag === 'input' || tag === 'textarea' || tag === 'select'
+    }
+
+    const handleShortcut = (event: KeyboardEvent) => {
+      if (isEditableTarget(event.target)) return
+
+      const cmd = event.metaKey || event.ctrlKey
+      const key = event.key.toLowerCase()
+
+      if (cmd && key === 's') {
+        event.preventDefault()
+        void saveWorkflow()
+        return
+      }
+
+      if (cmd && event.key === 'Enter') {
+        event.preventDefault()
+        void runWorkflow()
+        return
+      }
+
+      if (cmd && key === 'd') {
+        event.preventDefault()
+        duplicateSelectedNode()
+        return
+      }
+
+      if ((event.key === 'Delete' || event.key === 'Backspace') && selectedNodeId) {
+        event.preventDefault()
+        deleteSelectedBranch()
+        return
+      }
+
+      if (key === 'f') {
+        event.preventDefault()
+        fitView()
+        return
+      }
+
+      if (event.key === '+' || event.key === '=') {
+        event.preventDefault()
+        zoomIn()
+        return
+      }
+
+      if (event.key === '-') {
+        event.preventDefault()
+        zoomOut()
+      }
+    }
+
+    window.addEventListener('keydown', handleShortcut)
+    return () => window.removeEventListener('keydown', handleShortcut)
+  }, [
+    deleteSelectedBranch,
+    duplicateSelectedNode,
+    fitView,
+    runWorkflow,
+    saveWorkflow,
+    selectedNodeId,
+    zoomIn,
+    zoomOut,
+  ])
 
   if (loading) {
     return (
@@ -982,6 +1150,20 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
               <Target className="h-4 w-4" />
               CEO Command Board
             </div>
+
+            <div className="rounded-lg border border-[#CBD5E1] bg-white px-2 py-1 text-[11px] text-[#334155]">
+              {isDirty ? 'Unsaved changes' : 'Synced'}
+              {lastSavedAt ? ` • ${new Date(lastSavedAt).toLocaleTimeString()}` : ''}
+            </div>
+
+            <label className="inline-flex items-center gap-1 rounded-lg border border-[#CBD5E1] bg-white px-2 py-1 text-[11px] text-[#334155]">
+              Autosave
+              <input
+                type="checkbox"
+                checked={autosaveEnabled}
+                onChange={(event) => setAutosaveEnabled(event.target.checked)}
+              />
+            </label>
 
             <label className="text-xs font-medium text-[#334155]">Connection Type</label>
             <select
@@ -1228,12 +1410,17 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
                 nodes={nodes}
                 edges={edges}
                 nodeTypes={nodeTypes}
-                onNodesChange={onNodesChange}
-                onEdgesChange={onEdgesChange}
+                onNodesChange={handleNodesChange}
+                onEdgesChange={handleEdgesChange}
                 onConnect={onConnect}
                 onNodeClick={(_, node) => setSelectedNodeId(node.id)}
                 onPaneClick={() => setSelectedNodeId(null)}
                 onInit={setFlowInstance}
+                panOnScroll
+                selectionOnDrag
+                snapToGrid
+                snapGrid={[20, 20]}
+                defaultEdgeOptions={{ type: 'smoothstep' }}
                 fitView
                 proOptions={{ hideAttribution: true }}
               >
@@ -1289,6 +1476,9 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
                 <p className="text-xs text-[#475569]">
                   Tune selected node behavior, role, and function scope.
                 </p>
+                <p className="mt-1 text-[10px] text-[#64748B]">
+                  Shortcuts: Ctrl/Cmd+S Save, Ctrl/Cmd+Enter Run, Ctrl/Cmd+D Duplicate, Del Remove, F Fit.
+                </p>
               </div>
 
               {!selectedNode && (
@@ -1322,6 +1512,7 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
                     value={selectedNode.data.role}
                     onChange={(event) => {
                       const nextRole = event.target.value as NodeRole
+                      setIsDirty(true)
                       setNodes((prev) =>
                         prev.map((node) =>
                           node.id === selectedNode.id
@@ -1454,6 +1645,25 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
           </div>
         </div>
       </div>
+
+      {toasts.length > 0 && (
+        <div className="pointer-events-none fixed right-4 top-20 z-50 space-y-2">
+          {toasts.map((toast) => (
+            <div
+              key={toast.id}
+              className={`rounded-lg border px-3 py-2 text-xs shadow-lg ${
+                toast.type === 'success'
+                  ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                  : toast.type === 'error'
+                  ? 'border-red-200 bg-red-50 text-red-700'
+                  : 'border-blue-200 bg-blue-50 text-blue-700'
+              }`}
+            >
+              {toast.message}
+            </div>
+          ))}
+        </div>
+      )}
     </ReactFlowProvider>
   )
 }
