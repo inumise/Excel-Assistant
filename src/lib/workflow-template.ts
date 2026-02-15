@@ -1,6 +1,7 @@
 import { UserAISettings, Workflow } from '@/types/workflow'
+import { DEMO_USER_ID as DEFAULT_DEMO_USER_ID } from '@/lib/user-context'
 
-export const DEMO_USER_ID = 'demo-user'
+export const DEMO_USER_ID = DEFAULT_DEMO_USER_ID
 
 export const defaultAISettings: UserAISettings = {
   userId: DEMO_USER_ID,

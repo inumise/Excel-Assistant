@@ -30,6 +30,7 @@ Palette: `#1A1A1A` / `#FFD700` / `#C9A483`
     - `/cmd run workflow-web-design-factory`
     - `run workflow-web-design-factory`
   - `/api/whatsapp/qr` provisions QR/session metadata
+  - Optional webhook secret + request rate limiting
 - **Bugtracker**
   - `/bugtracker/[workflowId]` list and run auto-fix loop
   - `/api/bugtracker/cron` implements:
@@ -93,6 +94,7 @@ See `.env.example` for all options, including:
 - Supabase URL/service key
 - AI key encryption secret
 - Optional WPP Connect enable flag
+- Optional WhatsApp webhook secret
 - Optional SuperTokens client domains
 
 ## GitHub / VS Code workflow tie-in

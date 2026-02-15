@@ -4,7 +4,16 @@ import { AIProviderKeys } from '@/types/workflow'
 const ALGORITHM = 'aes-256-gcm'
 
 function getSecretKey() {
-  const secret = process.env.AI_KEYS_ENCRYPTION_SECRET || 'demo-insecure-secret-change-me'
+  const secret = process.env.AI_KEYS_ENCRYPTION_SECRET
+  if (!secret) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('AI_KEYS_ENCRYPTION_SECRET is required in production.')
+    }
+    return crypto
+      .createHash('sha256')
+      .update('demo-insecure-secret-change-me')
+      .digest()
+  }
   return crypto.createHash('sha256').update(secret).digest()
 }
 

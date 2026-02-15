@@ -3,6 +3,8 @@ import { addAuditLog, getUserSettings, getWorkflowById } from '@/lib/server-stor
 import { DEMO_USER_ID } from '@/lib/workflow-template'
 import { executeWorkflow } from '@/lib/workflow-engine'
 import { sendWhatsAppMessage } from '@/lib/whatsapp-service'
+import { resolveUserId } from '@/lib/user-context'
+import { checkRateLimit } from '@/lib/rate-limit'
 
 interface RunRequest {
   userId?: string
@@ -17,8 +19,22 @@ export async function POST(
 ) {
   const { workflowId } = await context.params
   const body = (await request.json()) as RunRequest
-  const userId = body.userId || DEMO_USER_ID
+  const userId = resolveUserId(body.userId || DEMO_USER_ID)
+  if (!userId) {
+    return NextResponse.json({ success: false, message: 'Valid userId is required.' }, { status: 400 })
+  }
   const triggerText = body.triggerText || `run ${workflowId}`
+
+  const rateLimit = checkRateLimit(`workflow-run:${userId}`, 20, 60_000)
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      { success: false, message: 'Rate limit exceeded.' },
+      {
+        status: 429,
+        headers: { 'Retry-After': String(Math.ceil((rateLimit.resetAt - Date.now()) / 1000)) },
+      }
+    )
+  }
 
   const [workflow, settings] = await Promise.all([
     getWorkflowById(userId, workflowId),

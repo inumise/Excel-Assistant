@@ -7,6 +7,7 @@ type WppModule = {
 }
 
 const runtimeCache = new Map<string, { qr?: string; status: 'pending' | 'connected' | 'disconnected' }>()
+const wppClientCache = new Map<string, { sendText?: (to: string, message: string) => Promise<unknown> }>()
 
 async function maybeLoadWppModule(): Promise<WppModule | null> {
   if (process.env.WPPCONNECT_ENABLED !== 'true') return null
@@ -29,7 +30,7 @@ export async function createOrRefreshWhatsAppSession(userId: string) {
   const wpp = await maybeLoadWppModule()
   if (wpp) {
     try {
-      await wpp.create({
+      const client = (await wpp.create({
         session: sessionId,
         headless: true,
         logQR: false,
@@ -45,7 +46,10 @@ export async function createOrRefreshWhatsAppSession(userId: string) {
               : 'disconnected'
           runtimeCache.set(userId, { qr: runtimeCache.get(userId)?.qr, status })
         },
-      })
+      })) as { sendText?: (to: string, message: string) => Promise<unknown> }
+      if (client?.sendText) {
+        wppClientCache.set(userId, client)
+      }
     } catch {
       // Fallback QR remains available for development/demo mode.
     }
@@ -55,6 +59,8 @@ export async function createOrRefreshWhatsAppSession(userId: string) {
     id: sessionId,
     userId,
     sessionData: {
+      qr: runtimeCache.get(userId)?.qr || fallbackQr,
+      status: runtimeCache.get(userId)?.status || 'pending',
       mode: wpp ? 'wppconnect' : 'demo',
     },
     linkedNumber: existing?.linkedNumber,
@@ -87,7 +93,27 @@ export async function markWhatsAppLinked(userId: string, number: string) {
 }
 
 export async function sendWhatsAppMessage(params: { to: string; message: string }) {
-  // Demo mode: return payload as if message was sent.
+  const wppSessionUser = [...runtimeCache.keys()].find(
+    (userId) => runtimeCache.get(userId)?.status === 'connected'
+  )
+
+  if (process.env.WPPCONNECT_ENABLED === 'true' && wppSessionUser) {
+    const client = wppClientCache.get(wppSessionUser)
+    if (client?.sendText) {
+      try {
+        await client.sendText(params.to, params.message)
+        return {
+          delivered: true,
+          to: params.to,
+          message: params.message,
+          provider: 'wppconnect',
+        }
+      } catch {
+        // Fallback to demo response below if send fails.
+      }
+    }
+  }
+
   return {
     delivered: true,
     to: params.to,

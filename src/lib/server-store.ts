@@ -11,6 +11,7 @@ import {
 import { defaultAISettings, DEMO_USER_ID, createWebDesignFactoryTemplate } from '@/lib/workflow-template'
 import { decryptAIKeys, encryptAIKeys } from '@/lib/secure-keys'
 import { getServerSupabaseClient } from '@/lib/supabase'
+import { isUuid, resolveUserId } from '@/lib/user-context'
 
 interface InMemoryStore {
   workflows: Workflow[]
@@ -36,7 +37,7 @@ function getInMemoryStore(): InMemoryStore {
 }
 
 export function getEffectiveUserId(userId?: string | null) {
-  return userId || DEMO_USER_ID
+  return resolveUserId(userId) || DEMO_USER_ID
 }
 
 function cloneWorkflow(workflow: Workflow): Workflow {
@@ -319,22 +320,31 @@ export async function listBugTrackRecords(workflowId: string) {
 }
 
 export async function saveWhatsAppSession(session: WhatsAppSession) {
+  const safeSessionId = isUuid(session.id) ? session.id : crypto.randomUUID()
   const normalized: WhatsAppSession = {
     ...session,
+    id: safeSessionId,
     userId: getEffectiveUserId(session.userId),
     updatedAt: new Date().toISOString(),
   }
 
   const supabase = getServerSupabaseClient()
   if (supabase) {
-    await supabase.from('whatsapp_sessions').upsert({
-      id: normalized.id,
-      user_id: normalized.userId,
-      session_data: normalized.sessionData,
-      linked_number: normalized.linkedNumber || null,
-      created_at: normalized.createdAt,
-      updated_at: normalized.updatedAt,
-    })
+    await supabase
+      .from('whatsapp_sessions')
+      .upsert(
+        {
+          id: normalized.id,
+          user_id: normalized.userId,
+          session_data: normalized.sessionData,
+          linked_number: normalized.linkedNumber || null,
+          created_at: normalized.createdAt,
+          updated_at: normalized.updatedAt,
+        },
+        {
+          onConflict: 'user_id',
+        }
+      )
   } else {
     const store = getInMemoryStore()
     const idx = store.sessions.findIndex((item) => item.userId === normalized.userId)

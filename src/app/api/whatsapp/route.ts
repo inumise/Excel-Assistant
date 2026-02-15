@@ -10,6 +10,8 @@ import {
 import { DEMO_USER_ID } from '@/lib/workflow-template'
 import { executeWorkflow } from '@/lib/workflow-engine'
 import { sendWhatsAppMessage } from '@/lib/whatsapp-service'
+import { resolveUserId } from '@/lib/user-context'
+import { checkRateLimit } from '@/lib/rate-limit'
 
 interface WhatsAppWebhookBody {
   userId?: string
@@ -19,9 +21,31 @@ interface WhatsAppWebhookBody {
 
 export async function POST(request: Request) {
   const payload = (await request.json()) as WhatsAppWebhookBody
-  const userId = payload.userId || DEMO_USER_ID
+  const configuredSecret = process.env.WHATSAPP_WEBHOOK_SECRET
+  if (configuredSecret) {
+    const receivedSecret = request.headers.get('x-webhook-secret')
+    if (receivedSecret !== configuredSecret) {
+      return NextResponse.json({ ok: false, message: 'Unauthorized webhook.' }, { status: 401 })
+    }
+  }
+
+  const userId = resolveUserId(payload.userId || DEMO_USER_ID)
+  if (!userId) {
+    return NextResponse.json({ ok: false, message: 'Valid userId is required.' }, { status: 400 })
+  }
   const from = payload.from
   const incomingText = payload.body || ''
+
+  const rateLimit = checkRateLimit(`whatsapp:${from || userId}`, 40, 60_000)
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      { ok: false, message: 'Rate limit exceeded.' },
+      {
+        status: 429,
+        headers: { 'Retry-After': String(Math.ceil((rateLimit.resetAt - Date.now()) / 1000)) },
+      }
+    )
+  }
 
   const settings = await getUserSettings(userId)
   const parsed = parseWhatsAppCommand(incomingText)
@@ -54,7 +78,7 @@ export async function POST(request: Request) {
   }
 
   await saveWhatsAppSession({
-    id: `session-${userId}`,
+    id: userId,
     userId,
     linkedNumber: from,
     sessionData: {
