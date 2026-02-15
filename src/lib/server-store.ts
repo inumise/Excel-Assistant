@@ -413,13 +413,11 @@ export async function upsertMemoryRecord(params: {
         .from('ai_memory')
         .upsert(
           {
-            id: crypto.randomUUID(),
             user_id: normalizedUserId,
             workflow_id: normalizedWorkflowId,
             namespace,
             key,
             value: params.value,
-            created_at: now,
             updated_at: now,
           },
           {
