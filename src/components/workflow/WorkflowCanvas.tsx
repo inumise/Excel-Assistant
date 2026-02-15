@@ -17,11 +17,12 @@ import ReactFlow, {
   useNodesState,
 } from 'reactflow'
 import 'reactflow/dist/style.css'
-import { Bot, Bug, Cog, GitBranch, Loader2, Save, Send, Settings2 } from 'lucide-react'
+import { Bug, Loader2, Save, Send, Settings2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { CodeBlock } from '@/components/Node/CodeBlock'
 import { DEMO_USER_ID } from '@/lib/workflow-template'
+import { calculateMindMapLayout, getDescendantIds } from '@/lib/mind-map-layout'
 import { EdgeDataType, Workflow, WorkflowEdge, WorkflowNodeData } from '@/types/workflow'
 
 interface FlowNodeData extends WorkflowNodeData {
@@ -35,6 +36,59 @@ const edgePalette: Record<EdgeDataType, string> = {
   code: '#22C55E',
   ai: '#A855F7',
 }
+
+interface WorkerTemplate {
+  id: string
+  label: string
+  role: 'manager' | 'programmer' | 'code'
+  prompt: string
+  edgeType: EdgeDataType
+}
+
+const workerTemplates: WorkerTemplate[] = [
+  {
+    id: 'manager',
+    label: 'Manager AI',
+    role: 'manager',
+    prompt: 'Coordinate specialist workers and escalate blockers.',
+    edgeType: 'ai',
+  },
+  {
+    id: 'programmer',
+    label: 'Programmer AI',
+    role: 'programmer',
+    prompt: 'Implement production-ready code and automation tasks.',
+    edgeType: 'code',
+  },
+  {
+    id: 'code',
+    label: 'Code Node',
+    role: 'code',
+    prompt: 'Executable code unit with bugtracking.',
+    edgeType: 'code',
+  },
+  {
+    id: 'excel-assistant',
+    label: 'Excel Assistant Worker',
+    role: 'code',
+    prompt: 'Automate spreadsheet operations, formulas, and reports.',
+    edgeType: 'api',
+  },
+  {
+    id: 'pr-agent',
+    label: 'PR Writer Agent',
+    role: 'programmer',
+    prompt: 'Write and schedule outreach/public relations messages.',
+    edgeType: 'ai',
+  },
+  {
+    id: 'accountant',
+    label: 'Accountant Worker',
+    role: 'code',
+    prompt: 'Build P&L, forecast, reconciliation, and audit output.',
+    edgeType: 'api',
+  },
+]
 
 function getEdgeStyle(edge: WorkflowEdge | Edge) {
   const edgeDataType =
@@ -220,6 +274,9 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
   const [loading, setLoading] = useState(true)
   const [workflows, setWorkflows] = useState<Workflow[]>([])
   const [activeWorkflowId, setActiveWorkflowId] = useState<string>('')
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
+  const [collapsedNodeIds, setCollapsedNodeIds] = useState<string[]>([])
+  const [templateId, setTemplateId] = useState<string>('manager')
   const [runInput, setRunInput] = useState('run workflow-web-design-factory')
   const [runOutput, setRunOutput] = useState('')
   const [auditRows, setAuditRows] = useState<
@@ -234,6 +291,10 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
   const activeWorkflow = useMemo(
     () => workflows.find((workflow) => workflow.id === activeWorkflowId) || null,
     [workflows, activeWorkflowId]
+  )
+  const selectedNode = useMemo(
+    () => (selectedNodeId ? nodes.find((node) => node.id === selectedNodeId) || null : null),
+    [nodes, selectedNodeId]
   )
 
   const patchNode = useCallback(
@@ -272,6 +333,8 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
       setNodes(nextNodes)
       setEdges(nextEdges)
       setActiveWorkflowId(workflow.id)
+      setSelectedNodeId(null)
+      setCollapsedNodeIds([])
     },
     [patchNode, setEdges, setNodes, userId]
   )
@@ -317,6 +380,7 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
             id: `edge-${Date.now()}`,
             dataType: 'ai',
             label: 'AI',
+            type: 'smoothstep',
           } as unknown as WorkflowEdge),
           currentEdges
         )
@@ -372,30 +436,83 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
     }
   }, [activeWorkflow, runInput, userId])
 
-  const addNode = useCallback(
-    (role: 'manager' | 'programmer' | 'code') => {
-      const id = `${role}-${Date.now()}`
-      const x = 100 + Math.random() * 320
-      const y = 120 + Math.random() * 260
+  const arrangeMindMap = useCallback(
+    (rootNodeId?: string) => {
+      const inferredRootId =
+        rootNodeId || selectedNodeId || nodes.find((node) => node.data.role === 'manager')?.id || nodes[0]?.id
+      if (!inferredRootId) return
+
+      const layout = calculateMindMapLayout(
+        nodes.map((node) => ({ id: node.id, position: node.position })),
+        edges.map((edge) => ({ source: edge.source, target: edge.target })),
+        { rootId: inferredRootId }
+      )
+
+      setNodes((prev) => {
+        let changed = false
+        const next = prev.map((node) => {
+          const position = layout.get(node.id)
+          if (!position) return node
+
+          const sourcePosition = position.x >= 0 ? Position.Right : Position.Left
+          const targetPosition = position.x >= 0 ? Position.Left : Position.Right
+          if (
+            node.position.x === position.x &&
+            node.position.y === position.y &&
+            node.sourcePosition === sourcePosition &&
+            node.targetPosition === targetPosition
+          ) {
+            return node
+          }
+
+          changed = true
+          return { ...node, position, sourcePosition, targetPosition }
+        })
+        return changed ? next : prev
+      })
+    },
+    [edges, nodes, selectedNodeId, setNodes]
+  )
+
+  const addNodeFromTemplate = useCallback(
+    (mode: 'root' | 'child' | 'sibling') => {
+      const template = workerTemplates.find((item) => item.id === templateId) || workerTemplates[0]
+      const selected = selectedNodeId ? nodes.find((node) => node.id === selectedNodeId) : null
+      const parentFromIncoming = selectedNodeId
+        ? edges.find((edge) => edge.target === selectedNodeId)?.source
+        : undefined
+      const parentId =
+        mode === 'child' ? selectedNodeId || undefined : mode === 'sibling' ? parentFromIncoming || selectedNodeId || undefined : undefined
+      const parentNode = parentId ? nodes.find((node) => node.id === parentId) : null
+      const siblingCount = parentId ? edges.filter((edge) => edge.source === parentId).length : nodes.length
+      const direction = (parentNode?.position.x || 0) < 0 ? -1 : 1
+
+      const id = `${template.id}-${Date.now()}`
+      const position = parentNode
+        ? {
+            x: parentNode.position.x + direction * 300,
+            y: parentNode.position.y + (siblingCount - 1) * 120,
+          }
+        : {
+            x: 0,
+            y: Math.max(0, nodes.length - 1) * 120,
+          }
 
       const nextNode: Node<FlowNodeData> = {
         id,
-        type: role,
-        position: { x, y },
+        type: template.role,
+        position,
+        sourcePosition: Position.Right,
+        targetPosition: Position.Left,
         data: {
-          label: `${role[0].toUpperCase()}${role.slice(1)} AI`,
-          role,
-          prompt:
-            role === 'manager'
-              ? 'Orchestrate sub-nodes and handle escalations.'
-              : role === 'programmer'
-              ? 'Generate clean production code.'
-              : 'Executable code node.',
+          label: template.label,
+          role: template.role,
+          prompt: template.prompt,
           codeSnippet:
-            role === 'code'
+            template.role === 'code'
               ? {
                   language: 'typescript',
-                  content: 'export const hello = "luxury workflow";\n',
+                  content: 'export const workerTask = () => "Mind map worker active";\n',
                 }
               : undefined,
           testsPassed: true,
@@ -410,9 +527,97 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
       }
 
       setNodes((prev) => [...prev, nextNode])
+      if (parentId) {
+        const nextEdge = getEdgeStyle({
+          id: `edge-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          source: parentId,
+          target: id,
+          dataType: template.edgeType,
+          label: template.edgeType.toUpperCase(),
+          type: 'smoothstep',
+        } as unknown as WorkflowEdge)
+        setEdges((prev) => [...prev, nextEdge])
+      }
+
+      setSelectedNodeId(id)
+      const rootHint = mode === 'root' ? id : parentId || selectedNode?.id
+      setTimeout(() => arrangeMindMap(rootHint), 0)
     },
-    [activeWorkflowId, patchNode, setNodes, userId]
+    [
+      activeWorkflowId,
+      arrangeMindMap,
+      edges,
+      nodes,
+      patchNode,
+      selectedNodeId,
+      setEdges,
+      setNodes,
+      templateId,
+      userId,
+    ]
   )
+
+  const toggleCollapse = useCallback(() => {
+    if (!selectedNodeId) return
+    setCollapsedNodeIds((prev) =>
+      prev.includes(selectedNodeId) ? prev.filter((nodeId) => nodeId !== selectedNodeId) : [...prev, selectedNodeId]
+    )
+  }, [selectedNodeId])
+
+  const deleteSelectedBranch = useCallback(() => {
+    if (!selectedNodeId) return
+
+    const descendants = new Set(
+      getDescendantIds(
+        selectedNodeId,
+        edges.map((edge) => ({ source: edge.source, target: edge.target }))
+      )
+    )
+    descendants.add(selectedNodeId)
+
+    setNodes((prev) => prev.filter((node) => !descendants.has(node.id)))
+    setEdges((prev) =>
+      prev.filter((edge) => !descendants.has(edge.source) && !descendants.has(edge.target))
+    )
+    setCollapsedNodeIds((prev) => prev.filter((nodeId) => !descendants.has(nodeId)))
+    setSelectedNodeId(null)
+  }, [edges, selectedNodeId, setEdges, setNodes])
+
+  useEffect(() => {
+    const hiddenNodeIds = new Set<string>()
+    collapsedNodeIds.forEach((collapsedId) => {
+      const descendants = getDescendantIds(
+        collapsedId,
+        edges.map((edge) => ({ source: edge.source, target: edge.target }))
+      )
+      descendants.forEach((nodeId) => hiddenNodeIds.add(nodeId))
+    })
+
+    setNodes((prev) => {
+      let changed = false
+      const next = prev.map((node) => {
+        const hidden = hiddenNodeIds.has(node.id)
+        if (node.hidden === hidden) return node
+        changed = true
+        return { ...node, hidden }
+      })
+      return changed ? next : prev
+    })
+
+    setEdges((prev) => {
+      let changed = false
+      const next = prev.map((edge) => {
+        const hidden =
+          hiddenNodeIds.has(edge.source) ||
+          hiddenNodeIds.has(edge.target) ||
+          collapsedNodeIds.includes(edge.source)
+        if (edge.hidden === hidden) return edge
+        changed = true
+        return { ...edge, hidden }
+      })
+      return changed ? next : prev
+    })
+  }, [collapsedNodeIds, edges, setEdges, setNodes])
 
   if (loading) {
     return (
@@ -433,6 +638,8 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
+            onNodeClick={(_, node) => setSelectedNodeId(node.id)}
+            onPaneClick={() => setSelectedNodeId(null)}
             fitView
             proOptions={{ hideAttribution: true }}
           >
@@ -478,31 +685,77 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
             </select>
           </div>
 
-          <div className="grid grid-cols-3 gap-2">
-            <Button
-              size="sm"
-              className="h-8 bg-[#2A2A2A] text-[#F3EDE5] hover:bg-[#383838]"
-              onClick={() => addNode('manager')}
-            >
-              <Bot className="mr-1 h-3.5 w-3.5" />
-              Manager
-            </Button>
-            <Button
-              size="sm"
-              className="h-8 bg-[#2A2A2A] text-[#F3EDE5] hover:bg-[#383838]"
-              onClick={() => addNode('programmer')}
-            >
-              <Cog className="mr-1 h-3.5 w-3.5" />
-              Programmer
-            </Button>
-            <Button
-              size="sm"
-              className="h-8 bg-[#2A2A2A] text-[#F3EDE5] hover:bg-[#383838]"
-              onClick={() => addNode('code')}
-            >
-              <GitBranch className="mr-1 h-3.5 w-3.5" />
-              Code
-            </Button>
+          <div className="rounded-lg border border-[#C9A483]/30 bg-[#1A1A1A] p-3">
+            <p className="mb-2 text-xs font-medium text-[#FFD700]">Mind Map Element Builder</p>
+            <div className="space-y-2">
+              <select
+                value={templateId}
+                onChange={(event) => setTemplateId(event.target.value)}
+                className="h-9 w-full rounded-lg border border-[#C9A483]/30 bg-[#111111] px-2 text-xs text-[#F3EDE5]"
+              >
+                {workerTemplates.map((template) => (
+                  <option key={template.id} value={template.id}>
+                    {template.label}
+                  </option>
+                ))}
+              </select>
+
+              <div className="grid grid-cols-3 gap-2">
+                <Button
+                  size="sm"
+                  className="h-8 bg-[#2A2A2A] text-[#F3EDE5] hover:bg-[#383838]"
+                  onClick={() => addNodeFromTemplate('root')}
+                >
+                  Root
+                </Button>
+                <Button
+                  size="sm"
+                  disabled={!selectedNodeId}
+                  className="h-8 bg-[#2A2A2A] text-[#F3EDE5] hover:bg-[#383838]"
+                  onClick={() => addNodeFromTemplate('child')}
+                >
+                  Child
+                </Button>
+                <Button
+                  size="sm"
+                  disabled={!selectedNodeId}
+                  className="h-8 bg-[#2A2A2A] text-[#F3EDE5] hover:bg-[#383838]"
+                  onClick={() => addNodeFromTemplate('sibling')}
+                >
+                  Sibling
+                </Button>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2">
+                <Button
+                  size="sm"
+                  className="h-8 bg-[#3C2E1E] text-[#FFD700] hover:bg-[#4D3A24]"
+                  onClick={() => arrangeMindMap()}
+                >
+                  Arrange
+                </Button>
+                <Button
+                  size="sm"
+                  disabled={!selectedNodeId}
+                  className="h-8 bg-[#2A2A2A] text-[#F3EDE5] hover:bg-[#383838]"
+                  onClick={toggleCollapse}
+                >
+                  {selectedNodeId && collapsedNodeIds.includes(selectedNodeId) ? 'Expand' : 'Collapse'}
+                </Button>
+                <Button
+                  size="sm"
+                  disabled={!selectedNodeId}
+                  className="h-8 bg-[#422020] text-[#FFD0D0] hover:bg-[#5A2A2A]"
+                  onClick={deleteSelectedBranch}
+                >
+                  Delete
+                </Button>
+              </div>
+
+              <p className="text-[11px] text-[#C9A483]">
+                Selected node: {selectedNode?.data.label || 'none'}
+              </p>
+            </div>
           </div>
 
           <div className="grid gap-2">

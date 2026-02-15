@@ -9,6 +9,8 @@ Palette: `#1A1A1A` / `#FFD700` / `#C9A483`
 - **Legacy Excel AI Assistant** preserved on `/` and `/excel`
 - **Workflow Studio** on `/workers`
   - Manager / Programmer / Code nodes
+  - Mind-map element builder (root / child / sibling branch actions)
+  - Auto-arrange layout, collapse/expand branches, delete subtrees
   - Monaco code blocks with:
     - AI Program
     - Self-Change
