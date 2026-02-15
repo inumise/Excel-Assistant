@@ -9,6 +9,11 @@ module.exports = {
   theme: {
     extend: {
       colors: {
+        luxury: {
+          black: '#1A1A1A',
+          gold: '#FFD700',
+          champagne: '#C9A483',
+        },
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
