@@ -785,7 +785,6 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
       arrangeMindMap,
       autoConnectFromSelection,
       createNodeObject,
-      createCustomTemplate,
       edges,
       nodes,
       selectedNodeId,
