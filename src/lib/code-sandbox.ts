@@ -15,7 +15,7 @@ export function executeJavaScriptSandbox(code: string): SandboxResult {
   })
 
   try {
-    const script = new vm.Script(code, { timeout: 2000 })
+    const script = new vm.Script(code)
     script.runInContext(context, { timeout: 2000 })
 
     return {
