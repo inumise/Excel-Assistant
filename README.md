@@ -9,6 +9,7 @@ Palette: `#1A1A1A` / `#FFD700` / `#C9A483`
 - **Mind Map First UI** on `/` (and `/workers` alias)
   - Left worker palette with graphics/icons
   - Drag worker cards to map and connect agents visually
+  - Futuristic clean-white design with deep RGB pulse/wave visual outlines
   - Manager / Programmer / Code nodes
   - Corporate role templates: Excel assistant, PR writer, accountant, sales, HR, legal, support, marketing, security, devops, QA, finance, procurement, design
   - Mind-map element builder (root / child / sibling branch actions)

@@ -41,7 +41,7 @@ export function CodeBlock({
   const statusBadge = useMemo(() => {
     if (bugStatus === 'running') {
       return (
-        <span className="inline-flex items-center gap-1 rounded-full bg-yellow-500/20 px-2 py-1 text-[11px] text-yellow-300">
+        <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-1 text-[11px] text-amber-700">
           <Loader2 className="h-3 w-3 animate-spin" />
           Bugtrack running
         </span>
@@ -50,7 +50,7 @@ export function CodeBlock({
 
     if (testsPassed || bugStatus === 'fixed') {
       return (
-        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/20 px-2 py-1 text-[11px] text-emerald-300">
+        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-1 text-[11px] text-emerald-700">
           <CheckCircle2 className="h-3 w-3" />
           Tests passed
         </span>
@@ -59,7 +59,7 @@ export function CodeBlock({
 
     if (bugStatus === 'failed') {
       return (
-        <span className="inline-flex items-center gap-1 rounded-full bg-red-500/20 px-2 py-1 text-[11px] text-red-300">
+        <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-1 text-[11px] text-red-700">
           <AlertTriangle className="h-3 w-3" />
           Failing
         </span>
@@ -67,7 +67,7 @@ export function CodeBlock({
     }
 
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-slate-500/20 px-2 py-1 text-[11px] text-slate-300">
+      <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1 text-[11px] text-slate-600">
         Idle
       </span>
     )
@@ -144,9 +144,9 @@ export function CodeBlock({
   }
 
   return (
-    <div className="space-y-2 rounded-xl border border-[#C9A483]/30 bg-[#111111] p-3">
+    <div className="space-y-2 rounded-xl border border-[#BFDBFE] bg-white p-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="text-xs font-medium text-[#C9A483]">{language.toUpperCase()} code</div>
+        <div className="text-xs font-medium text-[#1D4ED8]">{language.toUpperCase()} code</div>
         {statusBadge}
       </div>
 
@@ -154,16 +154,16 @@ export function CodeBlock({
         value={localPrompt}
         onChange={(event) => setLocalPrompt(event.target.value)}
         placeholder="Prompt for Programmer AI"
-        className="h-8 border-[#C9A483]/30 bg-[#1A1A1A] text-xs text-[#F5F5F5] placeholder:text-[#8A7B6A]"
+        className="h-8 border-[#93C5FD] bg-white text-xs text-[#0F172A] placeholder:text-[#64748B]"
       />
 
-      <div className="overflow-hidden rounded-lg border border-[#C9A483]/30">
+      <div className="overflow-hidden rounded-lg border border-[#93C5FD]">
         <Editor
           height={220}
           defaultLanguage={language}
           value={code}
           onChange={(value) => onChange(value || '')}
-          theme="vs-dark"
+          theme="vs"
           options={{
             minimap: { enabled: false },
             fontSize: 12,
@@ -179,7 +179,7 @@ export function CodeBlock({
           size="sm"
           disabled={isProgramming || isBugtracking}
           onClick={() => callProgrammer('generate')}
-          className="h-8 bg-[#FFD700] text-[#1A1A1A] hover:bg-[#E6C200]"
+          className="h-8 bg-[#1D4ED8] text-white hover:bg-[#1E40AF]"
         >
           <Sparkles className="mr-1 h-3.5 w-3.5" />
           AI Program
@@ -188,7 +188,7 @@ export function CodeBlock({
           size="sm"
           disabled={isProgramming || isBugtracking}
           onClick={() => callProgrammer('self-change')}
-          className="h-8 bg-[#C9A483] text-[#1A1A1A] hover:bg-[#B89269]"
+          className="h-8 bg-[#7C3AED] text-white hover:bg-[#6D28D9]"
         >
           Self-Change
         </Button>
@@ -196,7 +196,7 @@ export function CodeBlock({
           size="sm"
           disabled={isProgramming || isBugtracking}
           onClick={() => callProgrammer('delegate')}
-          className="h-8 bg-[#2D2D2D] text-[#F5F5F5] hover:bg-[#404040]"
+          className="h-8 bg-[#0F172A] text-white hover:bg-[#020617]"
         >
           Delegate
         </Button>
@@ -204,7 +204,7 @@ export function CodeBlock({
           size="sm"
           disabled={isProgramming || isBugtracking}
           onClick={runBugtrackLoop}
-          className="h-8 bg-[#3C2E1E] text-[#FFD700] hover:bg-[#4D3A24]"
+          className="h-8 bg-[#0EA5E9] text-white hover:bg-[#0284C7]"
         >
           {isBugtracking ? (
             <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
@@ -215,7 +215,7 @@ export function CodeBlock({
         </Button>
       </div>
 
-      <p className="text-[11px] text-[#C9A483]/80">{statusText}</p>
+      <p className="text-[11px] text-[#334155]">{statusText}</p>
     </div>
   )
 }

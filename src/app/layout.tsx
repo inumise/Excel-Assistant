@@ -19,35 +19,35 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={`${inter.className} bg-[#0B0B0B] text-[#F6F1E9]`}>
+      <body className={`${inter.className} bg-[#F8FBFF] text-[#0F172A]`}>
         <SuperTokensProvider>
-          <header className="sticky top-0 z-30 border-b border-[#C9A483]/20 bg-[#111111]/90 backdrop-blur">
+          <header className="sticky top-0 z-30 border-b border-[#BFDBFE] bg-white/80 backdrop-blur">
             <div className="mx-auto flex max-w-[1400px] items-center justify-between px-4 py-3">
               <div>
-                <p className="text-sm font-semibold tracking-wide text-[#FFD700]">
+                <p className="text-sm font-semibold tracking-wide text-[#1D4ED8]">
                   Hyperplacity AI Workers
                 </p>
-                <p className="text-[11px] text-[#C9A483]">
-                  #1A1A1A / #FFD700 / #C9A483 luxury stack
+                <p className="text-[11px] text-[#475569]">
+                  Futuristic white + deep RGB control surface
                 </p>
               </div>
 
               <nav className="flex items-center gap-2 text-xs">
                 <Link
                   href="/"
-                  className="rounded-md border border-[#FFD700]/40 px-3 py-1.5 text-[#FFD700] hover:bg-[#2A240A]"
+                  className="rounded-md border border-[#93C5FD] px-3 py-1.5 text-[#1D4ED8] hover:bg-[#EFF6FF]"
                 >
                   Mind Map
                 </Link>
                 <Link
                   href="/settings"
-                  className="rounded-md border border-[#C9A483]/30 px-3 py-1.5 text-[#EBDCC8] hover:bg-[#1A1A1A]"
+                  className="rounded-md border border-[#C7D2FE] px-3 py-1.5 text-[#4338CA] hover:bg-[#EEF2FF]"
                 >
                   AI Manager
                 </Link>
                 <Link
                   href="/bugtracker/workflow-web-design-factory"
-                  className="rounded-md border border-[#C9A483]/30 px-3 py-1.5 text-[#EBDCC8] hover:bg-[#1A1A1A]"
+                  className="rounded-md border border-[#FBCFE8] px-3 py-1.5 text-[#BE185D] hover:bg-[#FDF2F8]"
                 >
                   Bugtracker
                 </Link>

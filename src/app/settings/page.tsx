@@ -87,7 +87,7 @@ export default function SettingsPage() {
   if (isLoading || !settings) {
     return (
       <main className="mx-auto flex min-h-[70vh] w-full max-w-6xl items-center justify-center px-4 py-10">
-        <Loader2 className="h-8 w-8 animate-spin text-[#FFD700]" />
+        <Loader2 className="h-8 w-8 animate-spin text-[#2563EB]" />
       </main>
     )
   }
@@ -95,32 +95,32 @@ export default function SettingsPage() {
   return (
     <main className="mx-auto w-full max-w-6xl px-4 py-8">
       <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-[#FFD700]">AI Manager Settings</h1>
-        <p className="mt-1 text-sm text-[#C9A483]">
+        <h1 className="text-2xl font-semibold text-[#1D4ED8]">AI Manager Settings</h1>
+        <p className="mt-1 text-sm text-[#334155]">
           Configure provider keys, creativity, global prompts, and WhatsApp login control.
         </p>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <Card className="border-[#C9A483]/30 bg-[#1A1A1A]/90">
+        <Card className="rgb-glow-card border-[#BFDBFE] bg-white/90">
           <CardHeader>
-            <CardTitle className="text-lg text-[#FFD700]">Global AI Manager</CardTitle>
-            <CardDescription className="text-[#C9A483]">
+            <CardTitle className="text-lg text-[#1D4ED8]">Global AI Manager</CardTitle>
+            <CardDescription className="text-[#334155]">
               Per-user prompt/tone presets and multi-provider keys.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            <label className="block text-xs text-[#C9A483]">Global Prompt</label>
+            <label className="block text-xs text-[#334155]">Global Prompt</label>
             <textarea
               value={settings.globalPrompt}
               onChange={(event) => updateSettings('globalPrompt', event.target.value)}
               rows={4}
-              className="w-full rounded-lg border border-[#C9A483]/30 bg-[#111111] px-3 py-2 text-sm text-[#F5F5F5] outline-none"
+              className="w-full rounded-lg border border-[#CBD5E1] bg-white px-3 py-2 text-sm text-[#0F172A] outline-none"
             />
 
             <div className="grid gap-2 md:grid-cols-2">
               <div>
-                <label className="block text-xs text-[#C9A483]">Creativity ({settings.creativityTemp.toFixed(1)})</label>
+                <label className="block text-xs text-[#334155]">Creativity ({settings.creativityTemp.toFixed(1)})</label>
                 <input
                   type="range"
                   min={0.2}
@@ -128,15 +128,15 @@ export default function SettingsPage() {
                   step={0.1}
                   value={settings.creativityTemp}
                   onChange={(event) => updateSettings('creativityTemp', Number(event.target.value))}
-                  className="w-full accent-[#FFD700]"
+                  className="w-full accent-[#2563EB]"
                 />
               </div>
               <div>
-                <label className="block text-xs text-[#C9A483]">Tone Preset</label>
+                <label className="block text-xs text-[#334155]">Tone Preset</label>
                 <select
                   value={settings.tonePreset}
                   onChange={(event) => updateSettings('tonePreset', event.target.value as TonePreset)}
-                  className="h-10 w-full rounded-lg border border-[#C9A483]/30 bg-[#111111] px-3 text-sm text-[#F5F5F5]"
+                  className="h-10 w-full rounded-lg border border-[#CBD5E1] bg-white px-3 text-sm text-[#0F172A]"
                 >
                   {toneOptions.map((option) => (
                     <option key={option.value} value={option.value}>
@@ -148,7 +148,7 @@ export default function SettingsPage() {
             </div>
 
             <div className="grid gap-2">
-              <label className="text-xs text-[#C9A483]">OpenAI Key</label>
+              <label className="text-xs text-[#334155]">OpenAI Key</label>
               <Input
                 type="password"
                 value={settings.aiKeys.openai || ''}
@@ -158,12 +158,12 @@ export default function SettingsPage() {
                     openai: event.target.value,
                   })
                 }
-                className="border-[#C9A483]/30 bg-[#111111] text-[#F5F5F5]"
+                className="border-[#CBD5E1] bg-white text-[#0F172A]"
               />
             </div>
 
             <div className="grid gap-2">
-              <label className="text-xs text-[#C9A483]">Claude Key</label>
+              <label className="text-xs text-[#334155]">Claude Key</label>
               <Input
                 type="password"
                 value={settings.aiKeys.claude || ''}
@@ -173,12 +173,12 @@ export default function SettingsPage() {
                     claude: event.target.value,
                   })
                 }
-                className="border-[#C9A483]/30 bg-[#111111] text-[#F5F5F5]"
+                className="border-[#CBD5E1] bg-white text-[#0F172A]"
               />
             </div>
 
             <div className="grid gap-2">
-              <label className="text-xs text-[#C9A483]">Gemini Key</label>
+              <label className="text-xs text-[#334155]">Gemini Key</label>
               <Input
                 type="password"
                 value={settings.aiKeys.gemini || ''}
@@ -188,14 +188,14 @@ export default function SettingsPage() {
                     gemini: event.target.value,
                   })
                 }
-                className="border-[#C9A483]/30 bg-[#111111] text-[#F5F5F5]"
+                className="border-[#CBD5E1] bg-white text-[#0F172A]"
               />
             </div>
 
             <Button
               onClick={save}
               disabled={isSaving}
-              className="mt-2 w-full bg-[#FFD700] text-[#1A1A1A] hover:bg-[#E6C200]"
+              className="mt-2 w-full bg-[#1D4ED8] text-white hover:bg-[#1E40AF]"
             >
               {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
               Save AI Manager Settings
@@ -203,25 +203,25 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
 
-        <Card className="border-[#C9A483]/30 bg-[#1A1A1A]/90">
+        <Card className="rgb-glow-card border-[#C7D2FE] bg-white/90">
           <CardHeader>
-            <CardTitle className="text-lg text-[#FFD700]">WhatsApp Login & Control</CardTitle>
-            <CardDescription className="text-[#C9A483]">
+            <CardTitle className="text-lg text-[#4338CA]">WhatsApp Login & Control</CardTitle>
+            <CardDescription className="text-[#334155]">
               Link WhatsApp with QR to trigger workflows from chat commands.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
-            <label className="block text-xs text-[#C9A483]">WhatsApp Number</label>
+            <label className="block text-xs text-[#334155]">WhatsApp Number</label>
             <Input
               value={settings.whatsappNumber || ''}
               onChange={(event) => updateSettings('whatsappNumber', event.target.value)}
               placeholder="+1..."
-              className="border-[#C9A483]/30 bg-[#111111] text-[#F5F5F5]"
+              className="border-[#CBD5E1] bg-white text-[#0F172A]"
             />
             <Button
               onClick={setupWhatsApp}
               disabled={isQrLoading}
-              className="w-full bg-[#C9A483] text-[#1A1A1A] hover:bg-[#B89269]"
+              className="w-full bg-[#4F46E5] text-white hover:bg-[#4338CA]"
             >
               {isQrLoading ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -231,18 +231,18 @@ export default function SettingsPage() {
               Generate WhatsApp QR Session
             </Button>
 
-            <div className="rounded-xl border border-[#C9A483]/30 bg-[#111111] p-3">
-              <div className="mb-1 flex items-center gap-2 text-xs font-medium text-[#FFD700]">
+            <div className="rounded-xl border border-[#BFDBFE] bg-[#EFF6FF] p-3">
+              <div className="mb-1 flex items-center gap-2 text-xs font-medium text-[#1D4ED8]">
                 <Smartphone className="h-3.5 w-3.5" />
                 Session status: {whatsStatus}
               </div>
-              <pre className="overflow-auto rounded bg-black/40 p-2 text-[11px] text-[#E9D6BF]">
+              <pre className="overflow-auto rounded bg-white p-2 text-[11px] text-[#1F2937]">
                 {qrCode || 'No QR generated yet.'}
               </pre>
             </div>
 
-            <div className="rounded-xl border border-[#FFD700]/30 bg-[#111111] p-3 text-xs text-[#C9A483]">
-              <div className="mb-1 flex items-center gap-2 font-medium text-[#FFD700]">
+            <div className="rounded-xl border border-[#C7D2FE] bg-[#EEF2FF] p-3 text-xs text-[#334155]">
+              <div className="mb-1 flex items-center gap-2 font-medium text-[#4338CA]">
                 <ShieldCheck className="h-3.5 w-3.5" />
                 Auth stack
               </div>

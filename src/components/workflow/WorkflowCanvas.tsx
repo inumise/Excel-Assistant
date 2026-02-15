@@ -38,6 +38,7 @@ import {
   Settings2,
   ShieldCheck,
   ShoppingCart,
+  Sparkles,
   TestTube2,
   UserRoundPlus,
 } from 'lucide-react'
@@ -273,65 +274,76 @@ function NodeShell({
   subtitle,
   children,
   borderColor,
+  isSelected,
 }: {
   title: string
   subtitle: string
   children: React.ReactNode
   borderColor: string
+  isSelected?: boolean
 }) {
   return (
     <div
-      className="min-w-[280px] rounded-xl border bg-[#1A1A1A]/95 p-3 shadow-xl"
-      style={{ borderColor }}
+      className={`rgb-node-shell min-w-[280px] rounded-2xl p-3 shadow-xl ${
+        isSelected ? 'ring-2 ring-[#6D28D9]/50' : ''
+      }`}
+      style={{ borderColor, borderWidth: 1 }}
     >
       <div className="mb-2">
-        <div className="text-sm font-semibold text-[#FFD700]">{title}</div>
-        <p className="text-[11px] text-[#C9A483]">{subtitle}</p>
+        <div className="text-sm font-semibold text-[#111827]">{title}</div>
+        <p className="text-[11px] text-[#374151]">{subtitle}</p>
       </div>
       {children}
     </div>
   )
 }
 
-function ManagerNode({ id, data }: NodeProps<FlowNodeData>) {
+function ManagerNode({ id, data, selected }: NodeProps<FlowNodeData>) {
   return (
-    <NodeShell title={data.label} subtitle={data.workerType || 'Manager AI (orchestrator)'} borderColor="#FFD70077">
-      <Handle type="target" position={Position.Left} className="!bg-[#FFD700]" />
-      <p className="mb-2 text-xs text-[#E9D6BF]">{data.prompt}</p>
-      <div className="rounded-lg bg-[#0E0E0E] p-2 text-[11px] text-[#C9A483]">
+    <NodeShell
+      title={data.label}
+      subtitle={data.workerType || 'Manager AI (orchestrator)'}
+      borderColor="#F59E0B"
+      isSelected={selected}
+    >
+      <Handle type="target" position={Position.Left} className="!bg-[#F59E0B]" />
+      <p className="mb-2 text-xs text-[#1F2937]">{data.prompt}</p>
+      <div className="rounded-lg border border-[#FBBF24]/40 bg-[#FFF9E8] p-2 text-[11px] text-[#7C2D12]">
         Global flow coordinator. If auto-fix fails, manager escalation is triggered.
       </div>
-      <Handle type="source" position={Position.Right} className="!bg-[#FFD700]" />
-      <Handle type="source" position={Position.Bottom} className="!bg-[#FFD700]" />
+      <Handle type="source" position={Position.Right} className="!bg-[#F59E0B]" />
+      <Handle type="source" position={Position.Bottom} className="!bg-[#F59E0B]" />
     </NodeShell>
   )
 }
 
-function ProgrammerNode({ id, data }: NodeProps<FlowNodeData>) {
+function ProgrammerNode({ id, data, selected }: NodeProps<FlowNodeData>) {
   return (
     <NodeShell
       title={data.label}
       subtitle={data.workerType || 'Programmer AI (code generation)'}
-      borderColor="#C9A48377"
+      borderColor="#7C3AED"
+      isSelected={selected}
     >
-      <Handle type="target" position={Position.Left} className="!bg-[#C9A483]" />
-      <p className="mb-2 text-xs text-[#E9D6BF]">{data.prompt}</p>
-      <div className="rounded-lg bg-[#0E0E0E] p-2 text-[11px] text-[#C9A483]">
+      <Handle type="target" position={Position.Left} className="!bg-[#7C3AED]" />
+      <p className="mb-2 text-xs text-[#1F2937]">{data.prompt}</p>
+      <div className="rounded-lg border border-[#A78BFA]/40 bg-[#F5F3FF] p-2 text-[11px] text-[#5B21B6]">
         Delegates to helper agents and emits implementation blocks.
       </div>
-      <Handle type="source" position={Position.Right} className="!bg-[#C9A483]" />
+      <Handle type="source" position={Position.Right} className="!bg-[#7C3AED]" />
     </NodeShell>
   )
 }
 
-function CodeNode({ id, data }: NodeProps<FlowNodeData>) {
+function CodeNode({ id, data, selected }: NodeProps<FlowNodeData>) {
   return (
     <NodeShell
       title={data.label}
       subtitle={data.workerType || 'Self-modifying code node'}
-      borderColor="#66BB6A77"
+      borderColor="#2563EB"
+      isSelected={selected}
     >
-      <Handle type="target" position={Position.Left} className="!bg-[#66BB6A]" />
+      <Handle type="target" position={Position.Left} className="!bg-[#2563EB]" />
       <CodeBlock
         userId={data.userId}
         workflowId={data.workflowId}
@@ -355,7 +367,7 @@ function CodeNode({ id, data }: NodeProps<FlowNodeData>) {
         onStatusChange={(status) => data.onPatchNode(id, status)}
       />
       <div className="mt-2 grid grid-cols-2 gap-2 text-[11px]">
-        <label className="flex items-center justify-between rounded-md border border-[#C9A483]/30 px-2 py-1 text-[#C9A483]">
+        <label className="flex items-center justify-between rounded-md border border-[#93C5FD] bg-[#EFF6FF] px-2 py-1 text-[#1D4ED8]">
           Error Check
           <input
             type="checkbox"
@@ -370,14 +382,14 @@ function CodeNode({ id, data }: NodeProps<FlowNodeData>) {
               monitoring: event.target.value as WorkflowNodeData['monitoring'],
             })
           }
-          className="rounded-md border border-[#C9A483]/30 bg-[#1A1A1A] px-2 py-1 text-[#C9A483]"
+          className="rounded-md border border-[#93C5FD] bg-[#EFF6FF] px-2 py-1 text-[#1D4ED8]"
         >
           <option value="none">No monitor</option>
           <option value="sentry">Sentry</option>
           <option value="newrelic">New Relic</option>
         </select>
       </div>
-      <Handle type="source" position={Position.Right} className="!bg-[#66BB6A]" />
+      <Handle type="source" position={Position.Right} className="!bg-[#2563EB]" />
     </NodeShell>
   )
 }
@@ -440,6 +452,14 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
   const [collapsedNodeIds, setCollapsedNodeIds] = useState<string[]>([])
   const [templateId, setTemplateId] = useState<string>('manager-core')
+  const [workerSearch, setWorkerSearch] = useState('')
+  const [customWorkerName, setCustomWorkerName] = useState('Custom Specialist')
+  const [customWorkerPrompt, setCustomWorkerPrompt] = useState(
+    'Define a custom specialist mission and workflow objectives.'
+  )
+  const [customWorkerRole, setCustomWorkerRole] = useState<'manager' | 'programmer' | 'code'>(
+    'programmer'
+  )
   const [autoConnectFromSelection, setAutoConnectFromSelection] = useState(true)
   const [runInput, setRunInput] = useState('run workflow-web-design-factory')
   const [runOutput, setRunOutput] = useState('')
@@ -462,6 +482,14 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
     () => (selectedNodeId ? nodes.find((node) => node.id === selectedNodeId) || null : null),
     [nodes, selectedNodeId]
   )
+  const filteredTemplates = useMemo(() => {
+    const query = workerSearch.trim().toLowerCase()
+    if (!query) return workerTemplates
+    return workerTemplates.filter((template) => {
+      const content = `${template.label} ${template.description}`.toLowerCase()
+      return content.includes(query)
+    })
+  }, [workerSearch])
 
   const patchNode = useCallback(
     (nodeId: string, patch: Partial<WorkflowNodeData>) => {
@@ -676,14 +704,34 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
     [activeWorkflowId, patchNode, userId]
   )
 
+  const createCustomTemplate = useCallback((): WorkerTemplate => {
+    const label = customWorkerName.trim() || 'Custom Specialist'
+    const prompt =
+      customWorkerPrompt.trim() ||
+      'Define a custom specialist mission and workflow objectives.'
+    return {
+      id: `custom-${Date.now()}`,
+      label,
+      description: 'User-defined role for special business workflows.',
+      icon: Sparkles,
+      accent: '#2563EB',
+      role: customWorkerRole,
+      prompt,
+      edgeType: customWorkerRole === 'code' ? 'code' : 'ai',
+    }
+  }, [customWorkerName, customWorkerPrompt, customWorkerRole])
+
   const addNodeFromTemplate = useCallback(
     (
       mode: 'root' | 'child' | 'sibling' | 'drop',
       forcedTemplateId?: string,
-      forcedPosition?: { x: number; y: number }
+      forcedPosition?: { x: number; y: number },
+      forcedTemplate?: WorkerTemplate
     ) => {
       const template =
-        workerTemplates.find((item) => item.id === (forcedTemplateId || templateId)) || workerTemplates[0]
+        forcedTemplate ||
+        workerTemplates.find((item) => item.id === (forcedTemplateId || templateId)) ||
+        workerTemplates[0]
       const parentFromIncoming = selectedNodeId
         ? edges.find((edge) => edge.target === selectedNodeId)?.source
         : undefined
@@ -737,6 +785,7 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
       arrangeMindMap,
       autoConnectFromSelection,
       createNodeObject,
+      createCustomTemplate,
       edges,
       nodes,
       selectedNodeId,
@@ -843,229 +892,323 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
     })
   }, [collapsedNodeIds, edges, setEdges, setNodes])
 
+  const fitMindMap = useCallback(() => {
+    flowInstance?.fitView({ duration: 350, padding: 0.22 })
+  }, [flowInstance])
+
+  const zoomIn = useCallback(() => {
+    flowInstance?.zoomIn({ duration: 250 })
+  }, [flowInstance])
+
+  const zoomOut = useCallback(() => {
+    flowInstance?.zoomOut({ duration: 250 })
+  }, [flowInstance])
+
   if (loading) {
     return (
-      <div className="flex h-[72vh] items-center justify-center rounded-2xl border border-[#C9A483]/20 bg-[#121212]">
-        <Loader2 className="h-8 w-8 animate-spin text-[#FFD700]" />
+      <div className="flex h-[72vh] items-center justify-center rounded-2xl border border-[#BFDBFE] bg-white">
+        <Loader2 className="h-8 w-8 animate-spin text-[#1D4ED8]" />
       </div>
     )
   }
 
   return (
     <ReactFlowProvider>
-      <div className="grid gap-4 lg:grid-cols-[320px_1fr]">
-        <aside className="space-y-3 rounded-2xl border border-[#C9A483]/30 bg-[#111111] p-4">
-          <div>
-            <h3 className="mb-1 text-sm font-semibold text-[#FFD700]">Worker Types</h3>
-            <p className="text-xs text-[#C9A483]">
-              Drag a worker card onto the map. On mobile, tap a card then use Add Child/Sibling.
-            </p>
-          </div>
-
-          <div className="grid gap-2">
-            <label className="text-xs text-[#C9A483]">Active workflow</label>
-            <select
-              value={activeWorkflowId}
-              onChange={(event) => {
-                setActiveWorkflowId(event.target.value)
-                const next = workflows.find((workflow) => workflow.id === event.target.value)
-                if (next) hydrateWorkflow(next)
-              }}
-              className="h-9 rounded-lg border border-[#C9A483]/30 bg-[#1A1A1A] px-3 text-xs text-[#F3EDE5]"
-            >
-              {workflows.map((workflow) => (
-                <option key={workflow.id} value={workflow.id}>
-                  {workflow.name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="max-h-[45vh] space-y-2 overflow-auto pr-1">
-            {workerTemplates.map((template) => {
-              const Icon = template.icon
-              const isSelectedTemplate = templateId === template.id
-              return (
-                <button
-                  key={template.id}
-                  draggable
-                  onDragStart={(event) => onTemplateDragStart(event, template.id)}
-                  onClick={() => setTemplateId(template.id)}
-                  className={`w-full rounded-xl border p-2 text-left transition ${
-                    isSelectedTemplate
-                      ? 'border-[#FFD700]/70 bg-[#1D1D1D]'
-                      : 'border-[#C9A483]/20 bg-[#151515] hover:border-[#C9A483]/60'
-                  }`}
-                >
-                  <div className="mb-1 flex items-center gap-2">
-                    <span
-                      className="flex h-7 w-7 items-center justify-center rounded-lg"
-                      style={{ backgroundColor: `${template.accent}22`, color: template.accent }}
-                    >
-                      <Icon className="h-4 w-4" />
-                    </span>
-                    <p className="text-xs font-medium text-[#F3EDE5]">{template.label}</p>
-                  </div>
-                  <p className="text-[11px] text-[#C9A483]">{template.description}</p>
-                </button>
-              )
-            })}
-          </div>
-
-          <div className="rounded-lg border border-[#C9A483]/30 bg-[#1A1A1A] p-3">
-            <p className="mb-2 text-xs font-medium text-[#FFD700]">Mind Map Builder</p>
-            <div className="mb-2 grid grid-cols-3 gap-2">
-              <Button
-                size="sm"
-                className="h-8 bg-[#2A2A2A] text-[#F3EDE5] hover:bg-[#383838]"
-                onClick={() => addNodeFromTemplate('root')}
-              >
-                Root
-              </Button>
-              <Button
-                size="sm"
-                disabled={!selectedNodeId}
-                className="h-8 bg-[#2A2A2A] text-[#F3EDE5] hover:bg-[#383838]"
-                onClick={() => addNodeFromTemplate('child')}
-              >
-                Child
-              </Button>
-              <Button
-                size="sm"
-                disabled={!selectedNodeId}
-                className="h-8 bg-[#2A2A2A] text-[#F3EDE5] hover:bg-[#383838]"
-                onClick={() => addNodeFromTemplate('sibling')}
-              >
-                Sibling
-              </Button>
+      <div className="overflow-x-auto pb-2">
+        <div className="grid min-w-[1080px] gap-4 lg:grid-cols-[340px_1fr]">
+          <aside className="rgb-glow-card space-y-3 rounded-3xl p-4">
+            <div>
+              <h3 className="mb-1 text-sm font-semibold text-[#0F172A]">Worker Types</h3>
+              <p className="text-xs text-[#334155]">
+                Build any 2D workforce structure. Drag a card to the canvas, connect agents, and
+                zoom/pan freely.
+              </p>
             </div>
-            <div className="mb-2 grid grid-cols-3 gap-2">
-              <Button
-                size="sm"
-                className="h-8 bg-[#3C2E1E] text-[#FFD700] hover:bg-[#4D3A24]"
-                onClick={() => arrangeMindMap()}
+
+            <div className="grid gap-2">
+              <label className="text-xs font-medium text-[#1E293B]">Active workflow</label>
+              <select
+                value={activeWorkflowId}
+                onChange={(event) => {
+                  setActiveWorkflowId(event.target.value)
+                  const next = workflows.find((workflow) => workflow.id === event.target.value)
+                  if (next) hydrateWorkflow(next)
+                }}
+                className="h-9 rounded-lg border border-[#CBD5E1] bg-white px-3 text-xs text-[#0F172A]"
               >
-                Arrange
-              </Button>
-              <Button
-                size="sm"
-                disabled={!selectedNodeId}
-                className="h-8 bg-[#2A2A2A] text-[#F3EDE5] hover:bg-[#383838]"
-                onClick={toggleCollapse}
-              >
-                {selectedNodeId && collapsedNodeIds.includes(selectedNodeId) ? 'Expand' : 'Collapse'}
-              </Button>
-              <Button
-                size="sm"
-                disabled={!selectedNodeId}
-                className="h-8 bg-[#422020] text-[#FFD0D0] hover:bg-[#5A2A2A]"
-                onClick={deleteSelectedBranch}
-              >
-                Delete
-              </Button>
-            </div>
-            <label className="flex items-center justify-between text-[11px] text-[#C9A483]">
-              Auto-connect dropped worker from selected node
-              <input
-                type="checkbox"
-                checked={autoConnectFromSelection}
-                onChange={(event) => setAutoConnectFromSelection(event.target.checked)}
+                {workflows.map((workflow) => (
+                  <option key={workflow.id} value={workflow.id}>
+                    {workflow.name}
+                  </option>
+                ))}
+              </select>
+              <Input
+                value={workerSearch}
+                onChange={(event) => setWorkerSearch(event.target.value)}
+                placeholder="Search worker types..."
+                className="h-9 border-[#CBD5E1] bg-white text-xs text-[#0F172A]"
               />
-            </label>
-            <p className="mt-2 text-[11px] text-[#C9A483]">
-              Selected node: {selectedNode?.data.label || 'none'}
-            </p>
-          </div>
-
-          <div className="grid gap-2">
-            <label className="text-xs text-[#C9A483]">Run command</label>
-            <Input
-              value={runInput}
-              onChange={(event) => setRunInput(event.target.value)}
-              className="h-9 border-[#C9A483]/30 bg-[#1A1A1A] text-xs text-[#F3EDE5]"
-              placeholder='Example: /cmd run workflow-web-design-factory'
-            />
-            <div className="grid grid-cols-2 gap-2">
-              <Button
-                onClick={saveWorkflow}
-                disabled={isSaving}
-                className="h-9 bg-[#C9A483] text-[#1A1A1A] hover:bg-[#B89269]"
-              >
-                {isSaving ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Save className="mr-1 h-4 w-4" />}
-                Save
-              </Button>
-              <Button
-                onClick={runWorkflow}
-                disabled={isRunning}
-                className="h-9 bg-[#FFD700] text-[#1A1A1A] hover:bg-[#E6C200]"
-              >
-                {isRunning ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Send className="mr-1 h-4 w-4" />}
-                Run
-              </Button>
             </div>
-          </div>
-        </aside>
 
-        <div
-          ref={flowWrapperRef}
-          className="relative h-[78vh] overflow-hidden rounded-2xl border border-[#C9A483]/30 bg-[#0D0D0D]"
-          onDragOver={onFlowDragOver}
-          onDrop={onFlowDrop}
-        >
-          <ReactFlow
-            nodes={nodes}
-            edges={edges}
-            nodeTypes={nodeTypes}
-            onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
-            onConnect={onConnect}
-            onNodeClick={(_, node) => setSelectedNodeId(node.id)}
-            onPaneClick={() => setSelectedNodeId(null)}
-            onInit={setFlowInstance}
-            fitView
-            proOptions={{ hideAttribution: true }}
-          >
-            <Background color="#2A2A2A" gap={20} />
-            <MiniMap
-              pannable
-              zoomable
-              nodeStrokeWidth={2}
-              nodeColor={(node) => {
-                if (node.type === 'manager') return '#FFD700'
-                if (node.type === 'programmer') return '#C9A483'
-                return '#22C55E'
-              }}
-            />
-            <Controls />
-          </ReactFlow>
-
-          <div className="pointer-events-none absolute left-3 top-3 rounded-lg border border-[#C9A483]/30 bg-[#111111]/80 px-3 py-2 text-[11px] text-[#E9D6BF]">
-            Drag worker cards from the left panel into this mind map.
-          </div>
-
-          <div className="absolute bottom-3 right-3 w-72 rounded-lg border border-[#C9A483]/30 bg-[#111111]/85 p-3">
-            <div className="mb-1 flex items-center gap-2 text-xs font-medium text-[#FFD700]">
-              <Settings2 className="h-3.5 w-3.5" />
-              Last Run Output
+            <div className="max-h-[38vh] space-y-2 overflow-auto pr-1">
+              {filteredTemplates.map((template) => {
+                const Icon = template.icon
+                const isSelectedTemplate = templateId === template.id
+                return (
+                  <button
+                    key={template.id}
+                    draggable
+                    onDragStart={(event) => onTemplateDragStart(event, template.id)}
+                    onClick={() => setTemplateId(template.id)}
+                    className={`rgb-worker-card w-full rounded-xl p-2 text-left transition ${
+                      isSelectedTemplate ? 'ring-2 ring-[#4338CA]/30' : ''
+                    }`}
+                  >
+                    <div className="mb-1 flex items-center gap-2">
+                      <span
+                        className="flex h-7 w-7 items-center justify-center rounded-lg"
+                        style={{ backgroundColor: `${template.accent}20`, color: template.accent }}
+                      >
+                        <Icon className="h-4 w-4" />
+                      </span>
+                      <p className="text-xs font-semibold text-[#0F172A]">{template.label}</p>
+                    </div>
+                    <p className="text-[11px] text-[#334155]">{template.description}</p>
+                  </button>
+                )
+              })}
             </div>
-            <pre className="max-h-28 overflow-auto whitespace-pre-wrap text-[11px] text-[#E9D6BF]">
-              {runOutput || 'No execution yet.'}
-            </pre>
-          </div>
 
-          <div className="absolute bottom-3 left-3 w-72 rounded-lg border border-[#C9A483]/30 bg-[#111111]/85 p-3">
-            <div className="mb-1 flex items-center gap-2 text-xs font-medium text-[#FFD700]">
-              <Bug className="h-3.5 w-3.5" />
-              Audit Log
-            </div>
-            <div className="max-h-28 space-y-2 overflow-auto">
-              {auditRows.length === 0 && <p className="text-[11px] text-[#C9A483]">No entries yet.</p>}
-              {auditRows.slice(0, 5).map((row) => (
-                <div key={row.id} className="rounded border border-[#C9A483]/20 p-2 text-[11px] text-[#E9D6BF]">
-                  <div className="font-medium text-[#FFD700]">{row.action}</div>
-                  <div>{new Date(row.createdAt).toLocaleString()}</div>
+            <div className="rounded-2xl border border-[#BFDBFE] bg-[#EFF6FF] p-3">
+              <p className="mb-2 text-xs font-semibold text-[#1D4ED8]">Custom Worker Creator</p>
+              <div className="space-y-2">
+                <Input
+                  value={customWorkerName}
+                  onChange={(event) => setCustomWorkerName(event.target.value)}
+                  className="h-8 border-[#93C5FD] bg-white text-xs text-[#0F172A]"
+                  placeholder="Custom worker name"
+                />
+                <select
+                  value={customWorkerRole}
+                  onChange={(event) =>
+                    setCustomWorkerRole(event.target.value as 'manager' | 'programmer' | 'code')
+                  }
+                  className="h-8 w-full rounded-lg border border-[#93C5FD] bg-white px-2 text-xs text-[#0F172A]"
+                >
+                  <option value="manager">Manager</option>
+                  <option value="programmer">Programmer</option>
+                  <option value="code">Code</option>
+                </select>
+                <textarea
+                  value={customWorkerPrompt}
+                  onChange={(event) => setCustomWorkerPrompt(event.target.value)}
+                  rows={2}
+                  className="w-full rounded-lg border border-[#93C5FD] bg-white px-2 py-1 text-xs text-[#0F172A] outline-none"
+                />
+                <div className="grid grid-cols-2 gap-2">
+                  <Button
+                    size="sm"
+                    className="h-8 bg-[#2563EB] text-white hover:bg-[#1D4ED8]"
+                    onClick={() =>
+                      addNodeFromTemplate('root', undefined, undefined, createCustomTemplate())
+                    }
+                  >
+                    <Sparkles className="mr-1 h-3.5 w-3.5" />
+                    Add Root
+                  </Button>
+                  <Button
+                    size="sm"
+                    disabled={!selectedNodeId}
+                    className="h-8 bg-[#4F46E5] text-white hover:bg-[#4338CA]"
+                    onClick={() =>
+                      addNodeFromTemplate('child', undefined, undefined, createCustomTemplate())
+                    }
+                  >
+                    Add Child
+                  </Button>
                 </div>
-              ))}
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-[#C7D2FE] bg-[#EEF2FF] p-3">
+              <p className="mb-2 text-xs font-semibold text-[#312E81]">Mind Map Controls</p>
+              <div className="mb-2 grid grid-cols-3 gap-2">
+                <Button
+                  size="sm"
+                  className="h-8 bg-white text-[#1E293B] hover:bg-[#F8FAFC]"
+                  onClick={() => addNodeFromTemplate('root')}
+                >
+                  Root
+                </Button>
+                <Button
+                  size="sm"
+                  disabled={!selectedNodeId}
+                  className="h-8 bg-white text-[#1E293B] hover:bg-[#F8FAFC]"
+                  onClick={() => addNodeFromTemplate('child')}
+                >
+                  Child
+                </Button>
+                <Button
+                  size="sm"
+                  disabled={!selectedNodeId}
+                  className="h-8 bg-white text-[#1E293B] hover:bg-[#F8FAFC]"
+                  onClick={() => addNodeFromTemplate('sibling')}
+                >
+                  Sibling
+                </Button>
+              </div>
+              <div className="mb-2 grid grid-cols-3 gap-2">
+                <Button
+                  size="sm"
+                  className="h-8 bg-[#2563EB] text-white hover:bg-[#1D4ED8]"
+                  onClick={() => arrangeMindMap()}
+                >
+                  Arrange
+                </Button>
+                <Button
+                  size="sm"
+                  disabled={!selectedNodeId}
+                  className="h-8 bg-[#7C3AED] text-white hover:bg-[#6D28D9]"
+                  onClick={toggleCollapse}
+                >
+                  {selectedNodeId && collapsedNodeIds.includes(selectedNodeId) ? 'Expand' : 'Collapse'}
+                </Button>
+                <Button
+                  size="sm"
+                  disabled={!selectedNodeId}
+                  className="h-8 bg-[#DC2626] text-white hover:bg-[#B91C1C]"
+                  onClick={deleteSelectedBranch}
+                >
+                  Delete
+                </Button>
+              </div>
+              <label className="flex items-center justify-between text-[11px] text-[#334155]">
+                Auto-connect dropped worker
+                <input
+                  type="checkbox"
+                  checked={autoConnectFromSelection}
+                  onChange={(event) => setAutoConnectFromSelection(event.target.checked)}
+                />
+              </label>
+              <p className="mt-2 text-[11px] text-[#334155]">
+                Selected: {selectedNode?.data.label || 'none'}
+              </p>
+            </div>
+
+            <div className="grid gap-2">
+              <label className="text-xs font-medium text-[#1E293B]">Run command</label>
+              <Input
+                value={runInput}
+                onChange={(event) => setRunInput(event.target.value)}
+                className="h-9 border-[#CBD5E1] bg-white text-xs text-[#0F172A]"
+                placeholder='Example: /cmd run workflow-web-design-factory'
+              />
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  onClick={saveWorkflow}
+                  disabled={isSaving}
+                  className="h-9 bg-[#1D4ED8] text-white hover:bg-[#1E40AF]"
+                >
+                  {isSaving ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Save className="mr-1 h-4 w-4" />}
+                  Save
+                </Button>
+                <Button
+                  onClick={runWorkflow}
+                  disabled={isRunning}
+                  className="h-9 bg-[#4F46E5] text-white hover:bg-[#4338CA]"
+                >
+                  {isRunning ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Send className="mr-1 h-4 w-4" />}
+                  Run
+                </Button>
+              </div>
+            </div>
+          </aside>
+
+          <div
+            ref={flowWrapperRef}
+            className="rgb-wave-space relative h-[80vh] overflow-hidden rounded-3xl border border-[#E2E8F0]"
+            onDragOver={onFlowDragOver}
+            onDrop={onFlowDrop}
+          >
+            <ReactFlow
+              nodes={nodes}
+              edges={edges}
+              nodeTypes={nodeTypes}
+              onNodesChange={onNodesChange}
+              onEdgesChange={onEdgesChange}
+              onConnect={onConnect}
+              onNodeClick={(_, node) => setSelectedNodeId(node.id)}
+              onPaneClick={() => setSelectedNodeId(null)}
+              onInit={setFlowInstance}
+              fitView
+              proOptions={{ hideAttribution: true }}
+            >
+              <Background color="#C7D2FE" gap={18} />
+              <MiniMap
+                pannable
+                zoomable
+                nodeStrokeWidth={2}
+                nodeColor={(node) => {
+                  if (node.type === 'manager') return '#F59E0B'
+                  if (node.type === 'programmer') return '#7C3AED'
+                  return '#2563EB'
+                }}
+              />
+              <Controls />
+            </ReactFlow>
+
+            <div className="pointer-events-none absolute left-4 top-4 rounded-lg border border-[#BFDBFE] bg-white/85 px-3 py-2 text-[11px] text-[#1E3A8A] shadow">
+              Drag worker cards from left. Connect handles to build any structure.
+            </div>
+
+            <div className="absolute right-4 top-4 flex gap-2">
+              <Button
+                size="sm"
+                className="h-8 bg-white text-[#1E293B] shadow hover:bg-[#F8FAFC]"
+                onClick={zoomIn}
+              >
+                Zoom +
+              </Button>
+              <Button
+                size="sm"
+                className="h-8 bg-white text-[#1E293B] shadow hover:bg-[#F8FAFC]"
+                onClick={zoomOut}
+              >
+                Zoom -
+              </Button>
+              <Button
+                size="sm"
+                className="h-8 bg-[#2563EB] text-white shadow hover:bg-[#1D4ED8]"
+                onClick={fitMindMap}
+              >
+                Fit View
+              </Button>
+            </div>
+
+            <div className="absolute bottom-4 right-4 w-72 rounded-xl border border-[#BFDBFE] bg-white/90 p-3 shadow-lg">
+              <div className="mb-1 flex items-center gap-2 text-xs font-semibold text-[#1D4ED8]">
+                <Settings2 className="h-3.5 w-3.5" />
+                Last Run Output
+              </div>
+              <pre className="max-h-28 overflow-auto whitespace-pre-wrap text-[11px] text-[#1F2937]">
+                {runOutput || 'No execution yet.'}
+              </pre>
+            </div>
+
+            <div className="absolute bottom-4 left-4 w-72 rounded-xl border border-[#C7D2FE] bg-white/90 p-3 shadow-lg">
+              <div className="mb-1 flex items-center gap-2 text-xs font-semibold text-[#4338CA]">
+                <Bug className="h-3.5 w-3.5" />
+                Audit Log
+              </div>
+              <div className="max-h-28 space-y-2 overflow-auto">
+                {auditRows.length === 0 && <p className="text-[11px] text-[#334155]">No entries yet.</p>}
+                {auditRows.slice(0, 5).map((row) => (
+                  <div key={row.id} className="rounded border border-[#E2E8F0] p-2 text-[11px] text-[#1F2937]">
+                    <div className="font-medium text-[#1E3A8A]">{row.action}</div>
+                    <div>{new Date(row.createdAt).toLocaleString()}</div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </div>
