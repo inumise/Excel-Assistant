@@ -22,6 +22,11 @@ interface MemoryDeleteRequest {
   key?: string
 }
 
+function normalizeText(value: string | undefined, fallback: string, maxLength: number) {
+  const text = (value || fallback).trim()
+  return text.slice(0, maxLength) || fallback
+}
+
 export async function GET(request: Request) {
   const url = new URL(request.url)
   const userId = resolveUserId(url.searchParams.get('userId') || DEMO_USER_ID)
@@ -44,21 +49,36 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const body = (await request.json()) as MemoryWriteRequest
+  let body: MemoryWriteRequest
+  try {
+    body = (await request.json()) as MemoryWriteRequest
+  } catch {
+    return NextResponse.json({ success: false, message: 'Invalid JSON payload.' }, { status: 400 })
+  }
   const userId = resolveUserId(body.userId || DEMO_USER_ID)
   if (!userId) {
     return NextResponse.json({ success: false, message: 'Valid userId is required.' }, { status: 400 })
   }
 
-  if (!body.key?.trim()) {
+  const key = normalizeText(body.key, '', 120)
+  const namespace = normalizeText(body.namespace, 'general', 80)
+  if (!key.trim()) {
     return NextResponse.json({ success: false, message: 'Memory key is required.' }, { status: 400 })
+  }
+
+  const payloadSize = JSON.stringify(body.value ?? null).length
+  if (payloadSize > 16_000) {
+    return NextResponse.json(
+      { success: false, message: 'Memory value too large (max 16KB JSON).' },
+      { status: 413 }
+    )
   }
 
   const record = await upsertMemoryRecord({
     userId,
     workflowId: body.workflowId,
-    namespace: body.namespace || 'general',
-    key: body.key,
+    namespace,
+    key,
     value: body.value ?? null,
   })
 
@@ -66,21 +86,28 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  const body = (await request.json()) as MemoryDeleteRequest
+  let body: MemoryDeleteRequest
+  try {
+    body = (await request.json()) as MemoryDeleteRequest
+  } catch {
+    return NextResponse.json({ success: false, message: 'Invalid JSON payload.' }, { status: 400 })
+  }
   const userId = resolveUserId(body.userId || DEMO_USER_ID)
   if (!userId) {
     return NextResponse.json({ success: false, message: 'Valid userId is required.' }, { status: 400 })
   }
 
-  if (!body.key?.trim()) {
+  const key = normalizeText(body.key, '', 120)
+  const namespace = normalizeText(body.namespace, 'general', 80)
+  if (!key.trim()) {
     return NextResponse.json({ success: false, message: 'Memory key is required.' }, { status: 400 })
   }
 
   const result = await deleteMemoryRecord({
     userId,
     workflowId: body.workflowId,
-    namespace: body.namespace || 'general',
-    key: body.key,
+    namespace,
+    key,
   })
 
   return NextResponse.json({ success: true, ...result })

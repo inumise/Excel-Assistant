@@ -22,6 +22,9 @@ Palette: `#1A1A1A` / `#FFD700` / `#C9A483`
   - Typed edge colors (API blue, Code green, AI purple)
   - Live communication pulse animation on connected edges during workflow runs
   - Lightweight “Signal XP” game-style counters (subtle, non-intrusive)
+  - Signal Storm simulator + pulse replay controls
+  - Workflow Validate + Auto-Repair controls
+  - Reliability Matrix panel for runtime health checks
   - Hierarchical node layout compatible with nested maps
 - **AI Manager Settings** on `/settings`
   - OpenAI / Claude / Gemini key fields
@@ -44,6 +47,11 @@ Palette: `#1A1A1A` / `#FFD700` / `#C9A483`
   - `/api/memory` for storing/retrieving worker context by namespace/key
   - Right-side “Memory Vault” panel for quick write/read/delete
   - Runtime stores latest run + node summaries for reuse in prompts/tools
+- **Workflow Validation + Self-Healing**
+  - `/api/workflows/[workflowId]/validate` to inspect/fix broken graph state
+  - Save and run endpoints perform safety validation and can auto-repair
+- **System Health Diagnostics**
+  - `/api/system/health` returns runtime readiness checks (providers, storage, security)
 
 ## Demo template
 
@@ -111,3 +119,7 @@ See `.env.example` for all options, including:
 - REST APIs are under `src/app/api/*` for direct inspection/debug in VS Code.
 - Unit + E2E tests are provided in `/tests` for CI hooks on GitHub Actions.
 - Bugtracker loop is callable manually (`/api/bugtracker/cron`) to integrate with PR/CI checks.
+
+## Upgrade/innovation tracker
+
+- `UPGRADE_MASTER_PLAN.md` contains the executed upgrade list, todo list, invention list, and technical improvements.

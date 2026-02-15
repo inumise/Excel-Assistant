@@ -98,6 +98,48 @@ interface RunWorkflowResponse {
   output?: string
   message?: string
   communications?: WorkflowCommunicationEvent[]
+  validation?: WorkflowValidationReport
+  autoRepaired?: boolean
+  appliedFixes?: string[]
+}
+
+type ValidationSeverity = 'error' | 'warning' | 'info'
+
+interface WorkflowValidationIssue {
+  code: string
+  severity: ValidationSeverity
+  message: string
+  nodeId?: string
+  edgeId?: string
+  fixable?: boolean
+}
+
+interface WorkflowValidationReport {
+  score: number
+  safeToRun: boolean
+  summary: {
+    errors: number
+    warnings: number
+    infos: number
+  }
+  issues: WorkflowValidationIssue[]
+  generatedAt: string
+}
+
+type HealthStatus = 'ok' | 'warning' | 'error'
+
+interface SystemHealthCheck {
+  id: string
+  label: string
+  status: HealthStatus
+  detail: string
+}
+
+interface SystemHealthResponse {
+  success: boolean
+  status: 'healthy' | 'degraded' | 'critical'
+  checks: SystemHealthCheck[]
+  generatedAt: string
 }
 
 const edgePalette: Record<EdgeDataType, string> = {
@@ -526,6 +568,16 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
   const [signalScore, setSignalScore] = useState(0)
   const [activeSignalCount, setActiveSignalCount] = useState(0)
   const [lastSignalAt, setLastSignalAt] = useState<string | null>(null)
+  const [lastRunCommunications, setLastRunCommunications] = useState<WorkflowCommunicationEvent[]>(
+    []
+  )
+  const [validationReport, setValidationReport] = useState<WorkflowValidationReport | null>(null)
+  const [isValidating, setIsValidating] = useState(false)
+  const [systemHealthStatus, setSystemHealthStatus] = useState<'healthy' | 'degraded' | 'critical'>(
+    'healthy'
+  )
+  const [systemHealthChecks, setSystemHealthChecks] = useState<SystemHealthCheck[]>([])
+  const [isHealthLoading, setIsHealthLoading] = useState(false)
   const [memoryRecords, setMemoryRecords] = useState<MemoryRecord[]>([])
   const [memoryNamespace, setMemoryNamespace] = useState('general')
   const [memoryKey, setMemoryKey] = useState('')
@@ -677,6 +729,51 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
     [clearSignalTimers, patchNode, setEdges, setNodes, userId]
   )
 
+  const validateActiveWorkflow = useCallback(
+    async (autoRepair = false) => {
+      if (!activeWorkflowId) return null
+      setIsValidating(true)
+      try {
+        const endpoint = `/api/workflows/${encodeURIComponent(activeWorkflowId)}/validate`
+        const response = await fetch(endpoint, autoRepair
+          ? {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ userId, autoRepair: true }),
+            }
+          : undefined)
+
+        const data = await response.json()
+        if (!response.ok) {
+          throw new Error(data.message || `Validation failed (${response.status})`)
+        }
+
+        if (data.report) {
+          setValidationReport(data.report as WorkflowValidationReport)
+        }
+
+        if (autoRepair && data.workflow) {
+          const repaired = data.workflow as Workflow
+          setWorkflows((prev) => prev.map((item) => (item.id === repaired.id ? repaired : item)))
+          hydrateWorkflow(repaired)
+          if (Array.isArray(data.appliedFixes) && data.appliedFixes.length > 0) {
+            pushToast(`Auto-repair applied ${data.appliedFixes.length} fix(es).`, 'success')
+          } else {
+            pushToast('Auto-repair completed (no changes needed).', 'info')
+          }
+        }
+
+        return data.report as WorkflowValidationReport
+      } catch (error) {
+        pushToast(error instanceof Error ? error.message : 'Validation failed.', 'error')
+        return null
+      } finally {
+        setIsValidating(false)
+      }
+    },
+    [activeWorkflowId, hydrateWorkflow, pushToast, userId]
+  )
+
   const fetchWorkflows = useCallback(async () => {
     setLoading(true)
     try {
@@ -689,6 +786,11 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
       setWorkflows(fetched)
       if (fetched[0]) {
         hydrateWorkflow(fetched[0])
+      } else {
+        setNodes([])
+        setEdges([])
+        setActiveWorkflowId('')
+        setValidationReport(null)
       }
     } catch (error) {
       pushToast(
@@ -737,6 +839,24 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
       setIsMemoryLoading(false)
     }
   }, [activeWorkflowId, userId])
+
+  const fetchSystemHealth = useCallback(async () => {
+    setIsHealthLoading(true)
+    try {
+      const response = await fetch(`/api/system/health?userId=${encodeURIComponent(userId)}`)
+      if (!response.ok) {
+        throw new Error(`Failed to load system health (${response.status})`)
+      }
+      const data = (await response.json()) as SystemHealthResponse
+      setSystemHealthChecks(Array.isArray(data.checks) ? data.checks : [])
+      setSystemHealthStatus(data.status || 'degraded')
+    } catch {
+      setSystemHealthChecks([])
+      setSystemHealthStatus('critical')
+    } finally {
+      setIsHealthLoading(false)
+    }
+  }, [userId])
 
   const saveMemoryRecord = useCallback(async () => {
     if (!activeWorkflowId) return
@@ -825,6 +945,16 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
   useEffect(() => {
     fetchMemory()
   }, [fetchMemory])
+
+  useEffect(() => {
+    if (!activeWorkflowId) return
+    void validateActiveWorkflow(false)
+  }, [activeWorkflowId, validateActiveWorkflow])
+
+  useEffect(() => {
+    if (!activeWorkflowId) return
+    void fetchSystemHealth()
+  }, [activeWorkflowId, fetchSystemHealth])
 
   const applyMindMapLayout = useCallback(
     (rootId?: string) => {
@@ -1197,7 +1327,10 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
           body: JSON.stringify(workflow),
         })
         if (!response.ok) {
-          throw new Error(`Save failed (${response.status})`)
+          const failData = await response.json().catch(() => null)
+          throw new Error(
+            failData?.message || failData?.validation?.issues?.[0]?.message || `Save failed (${response.status})`
+          )
         }
         const data = await response.json()
         const saved = data.workflow as Workflow
@@ -1205,6 +1338,12 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
         hydrateWorkflow(saved)
         setIsDirty(false)
         setLastSavedAt(new Date().toISOString())
+        if (data.validation) {
+          setValidationReport(data.validation as WorkflowValidationReport)
+        }
+        if (Array.isArray(data.appliedFixes) && data.appliedFixes.length > 0 && !silent) {
+          pushToast(`Saved with ${data.appliedFixes.length} auto-fix(es).`, 'info')
+        }
         if (!silent) pushToast('Workflow saved.', 'success')
         return true
       } catch (error) {
@@ -1244,13 +1383,27 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
         throw new Error(data.message || `Run failed (${response.status})`)
       }
       const communications = Array.isArray(data.communications) ? data.communications : []
+      setLastRunCommunications(communications)
       setRunOutput(data.output || data.message || 'No output')
       playCommunicationSignals(communications)
       await fetchMemory()
+      if (data.validation) {
+        setValidationReport(data.validation)
+      } else {
+        void validateActiveWorkflow(false)
+      }
       pushToast('Workflow run completed.', 'success')
       if (communications.length > 0) {
         pushToast(`Signal burst: ${communications.length} edge pulse(s)`, 'info')
       }
+      if (data.autoRepaired) {
+        pushToast(
+          `Self-heal activated: ${(data.appliedFixes || []).length} fix(es) applied before run.`,
+          'info'
+        )
+        await fetchWorkflows()
+      }
+      await fetchSystemHealth()
     } catch (error) {
       setRunOutput(error instanceof Error ? error.message : 'Workflow execution failed.')
       pushToast(
@@ -1260,7 +1413,58 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
     } finally {
       setIsRunning(false)
     }
-  }, [activeWorkflow, fetchMemory, playCommunicationSignals, pushToast, runInput, userId])
+  }, [
+    activeWorkflow,
+    fetchMemory,
+    fetchSystemHealth,
+    fetchWorkflows,
+    playCommunicationSignals,
+    pushToast,
+    runInput,
+    userId,
+    validateActiveWorkflow,
+  ])
+
+  const replayLastSignals = useCallback(() => {
+    if (lastRunCommunications.length === 0) {
+      pushToast('No previous communication pulse to replay yet.', 'info')
+      return
+    }
+    playCommunicationSignals(lastRunCommunications)
+    pushToast(`Replaying ${lastRunCommunications.length} pulse event(s).`, 'info')
+  }, [lastRunCommunications, playCommunicationSignals, pushToast])
+
+  const simulateSignalStorm = useCallback(() => {
+    const visibleEdges = edges.filter((edge) => !edge.hidden)
+    if (visibleEdges.length === 0) {
+      pushToast('Need at least one connection to simulate signal storm.', 'error')
+      return
+    }
+
+    const totalSignals = Math.min(42, Math.max(8, visibleEdges.length * 3))
+    const now = Date.now()
+    const events: WorkflowCommunicationEvent[] = Array.from({ length: totalSignals }).map(
+      (_, index) => {
+        const edge = visibleEdges[index % visibleEdges.length]
+        const dataType =
+          ((edge.data as { dataType?: EdgeDataType } | undefined)?.dataType as EdgeDataType) || 'ai'
+        return {
+          id: `storm-${now}-${index}`,
+          edgeId: edge.id,
+          source: edge.source,
+          target: edge.target,
+          dataType,
+          message: `Signal storm pulse ${index + 1}`,
+          createdAt: new Date(now + index * 5).toISOString(),
+        }
+      }
+    )
+
+    setLastRunCommunications(events)
+    playCommunicationSignals(events)
+    setRunOutput(`Signal storm simulation ran with ${events.length} synthetic pulses.`)
+    pushToast(`Signal storm launched: ${events.length} pulses.`, 'success')
+  }, [edges, playCommunicationSignals, pushToast])
 
   useEffect(() => {
     if (!autosaveEnabled || !isDirty || !activeWorkflow || isSaving) return
@@ -1371,6 +1575,32 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
               {lastSignalAt ? ` • ${new Date(lastSignalAt).toLocaleTimeString()}` : ''}
             </div>
 
+            <div
+              className={`rounded-lg px-2 py-1 text-[11px] ${
+                validationReport
+                  ? validationReport.safeToRun
+                    ? 'border border-emerald-200 bg-emerald-50 text-emerald-700'
+                    : 'border border-red-200 bg-red-50 text-red-700'
+                  : 'border border-slate-200 bg-slate-50 text-slate-600'
+              }`}
+            >
+              {validationReport
+                ? `Validation ${validationReport.score}/100 · E${validationReport.summary.errors} W${validationReport.summary.warnings}`
+                : 'Validation pending'}
+            </div>
+
+            <div
+              className={`rounded-lg px-2 py-1 text-[11px] ${
+                systemHealthStatus === 'healthy'
+                  ? 'border border-emerald-200 bg-emerald-50 text-emerald-700'
+                  : systemHealthStatus === 'degraded'
+                  ? 'border border-amber-200 bg-amber-50 text-amber-700'
+                  : 'border border-red-200 bg-red-50 text-red-700'
+              }`}
+            >
+              System: {isHealthLoading ? 'Checking...' : systemHealthStatus}
+            </div>
+
             <label className="inline-flex items-center gap-1 rounded-lg border border-[#CBD5E1] bg-white px-2 py-1 text-[11px] text-[#334155]">
               Autosave
               <input
@@ -1432,6 +1662,34 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
                 <Send className="mr-1 h-4 w-4" />
               )}
               Run
+            </Button>
+            <Button
+              className="h-9 bg-[#0F766E] text-white hover:bg-[#115E59]"
+              onClick={() => void validateActiveWorkflow(false)}
+              disabled={isValidating}
+            >
+              {isValidating ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : null}
+              Validate
+            </Button>
+            <Button
+              className="h-9 bg-[#7C2D12] text-white hover:bg-[#9A3412]"
+              onClick={() => void validateActiveWorkflow(true)}
+              disabled={isValidating}
+            >
+              Auto-Repair
+            </Button>
+            <Button
+              className="h-9 bg-[#DB2777] text-white hover:bg-[#BE185D]"
+              onClick={simulateSignalStorm}
+            >
+              Storm
+            </Button>
+            <Button
+              className="h-9 bg-[#1E293B] text-white hover:bg-[#0F172A]"
+              onClick={replayLastSignals}
+              disabled={lastRunCommunications.length === 0}
+            >
+              Replay Pulse
             </Button>
           </div>
         </section>
@@ -1841,6 +2099,83 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
                   </div>
                 </div>
               )}
+
+              <div className="rounded-xl border border-[#FDE68A] bg-[#FFFBEB] p-3">
+                <div className="mb-2 flex items-center justify-between">
+                  <p className="text-xs font-semibold text-[#92400E]">Workflow Validation</p>
+                  <Button
+                    size="sm"
+                    className="h-7 bg-white text-[#92400E] hover:bg-[#FEF3C7]"
+                    onClick={() => void validateActiveWorkflow(false)}
+                    disabled={isValidating || !activeWorkflowId}
+                  >
+                    Refresh
+                  </Button>
+                </div>
+                {!validationReport && (
+                  <p className="text-[11px] text-[#92400E]">No validation report yet.</p>
+                )}
+                {validationReport && (
+                  <div className="space-y-2">
+                    <p className="text-[11px] text-[#92400E]">
+                      Score {validationReport.score}/100 • Errors {validationReport.summary.errors} •
+                      Warnings {validationReport.summary.warnings} • Infos {validationReport.summary.infos}
+                    </p>
+                    <div className="max-h-24 space-y-1 overflow-auto">
+                      {validationReport.issues.slice(0, 6).map((issue, index) => (
+                        <div
+                          key={`${issue.code}-${index}`}
+                          className={`rounded border px-2 py-1 text-[10px] ${
+                            issue.severity === 'error'
+                              ? 'border-red-200 bg-red-50 text-red-700'
+                              : issue.severity === 'warning'
+                              ? 'border-amber-200 bg-amber-50 text-amber-700'
+                              : 'border-blue-200 bg-blue-50 text-blue-700'
+                          }`}
+                        >
+                          [{issue.severity}] {issue.message}
+                        </div>
+                      ))}
+                      {validationReport.issues.length === 0 && (
+                        <p className="text-[11px] text-emerald-700">No issues detected.</p>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="rounded-xl border border-[#BFDBFE] bg-[#EFF6FF] p-3">
+                <div className="mb-2 flex items-center justify-between">
+                  <p className="text-xs font-semibold text-[#1D4ED8]">Reliability Matrix</p>
+                  <Button
+                    size="sm"
+                    className="h-7 bg-white text-[#1D4ED8] hover:bg-[#DBEAFE]"
+                    onClick={() => void fetchSystemHealth()}
+                    disabled={isHealthLoading}
+                  >
+                    {isHealthLoading ? 'Checking...' : 'Refresh'}
+                  </Button>
+                </div>
+                <div className="max-h-28 space-y-1 overflow-auto">
+                  {systemHealthChecks.length === 0 && (
+                    <p className="text-[11px] text-[#1D4ED8]">No health data yet.</p>
+                  )}
+                  {systemHealthChecks.map((check) => (
+                    <div
+                      key={check.id}
+                      className={`rounded border px-2 py-1 text-[10px] ${
+                        check.status === 'ok'
+                          ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                          : check.status === 'warning'
+                          ? 'border-amber-200 bg-amber-50 text-amber-700'
+                          : 'border-red-200 bg-red-50 text-red-700'
+                      }`}
+                    >
+                      <span className="font-semibold">{check.label}</span>: {check.detail}
+                    </div>
+                  ))}
+                </div>
+              </div>
 
               <div className="rounded-xl border border-[#BFDBFE] bg-[#EFF6FF] p-3">
                 <p className="mb-1 text-xs font-semibold text-[#1D4ED8]">Execution Output</p>
