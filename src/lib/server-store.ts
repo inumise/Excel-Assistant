@@ -145,7 +145,9 @@ export async function listWorkflows(userId: string): Promise<Workflow[]> {
   }
 
   const store = getInMemoryStore()
-  const filtered = store.workflows.filter((workflow) => workflow.userId === effectiveUserId)
+  const filtered = store.workflows
+    .filter((workflow) => workflow.userId === effectiveUserId)
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
   if (filtered.length > 0) return filtered.map(cloneWorkflow)
 
   const seeded = createOwnerStructureTemplate(effectiveUserId)

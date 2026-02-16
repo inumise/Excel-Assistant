@@ -1,4 +1,4 @@
-# Hyperplacity AI Workers (CEO Drawboard)
+# Owner AI Employee Builder
 
 Luxury AI automation suite built on Next.js + React Flow + Supabase-compatible backend.
 
@@ -6,7 +6,7 @@ Palette: `#1A1A1A` / `#FFD700` / `#C9A483`
 
 ## What is included
 
-- **CEO Drawboard UI** on `/` (and `/workers` alias)
+- **Owner Builder UI** on `/` (and `/workers`, `/structures` aliases)
   - Owner-first top command bar + empty schematic map board
   - Left AI worker list for click/hold + drag-to-map on mobile/PC
   - Right owner control window with Prompt / Code / Todo / Output modes
@@ -27,6 +27,11 @@ Palette: `#1A1A1A` / `#FFD700` / `#C9A483`
   - Workflow Validate + Auto-Repair controls
   - Reliability Matrix panel for runtime health checks
   - Hierarchical node layout compatible with nested maps
+- **Owner Suite Pages**
+  - `/overview` executive dashboard (structure scale + readiness)
+  - `/templates` one-click structure blueprints for large organizations
+  - `/playbooks` reusable prompt playbook library
+  - `/operations` reliability + validation + operations events
 - **AI Manager Settings** on `/settings`
   - OpenAI / Claude / Gemini key fields
   - Creativity slider (0.2–1.0)
@@ -53,14 +58,16 @@ Palette: `#1A1A1A` / `#FFD700` / `#C9A483`
   - Save and run endpoints perform safety validation and can auto-repair
 - **System Health Diagnostics**
   - `/api/system/health` returns runtime readiness checks (providers, storage, security)
+- **Template API**
+  - `/api/templates` list/create owner-scale structure templates
 
-## Demo template
+## Default starting structure
 
-Seeded workflow: **Web Design Factory**
+Seeded workflow: **Owner Employee Structure** (empty schematic map)
 
 Flow:
 
-`Manager AI -> Programmer AI -> Code Node -> Bugtracker -> WhatsApp confirmation`
+Drag worker from left list -> drop on map -> connect black/red dots -> edit prompts/code -> run
 
 ## Supabase schema and RLS
 
@@ -91,6 +98,10 @@ npm run dev
 Open:
 
 - `http://localhost:3000/` (mind map workspace)
+- `http://localhost:3000/overview`
+- `http://localhost:3000/templates`
+- `http://localhost:3000/playbooks`
+- `http://localhost:3000/operations`
 - `http://localhost:3000/workers`
 - `http://localhost:3000/settings`
 - `http://localhost:3000/bugtracker/workflow-web-design-factory`
