@@ -32,7 +32,7 @@ export function NodeDetailsPanel({
 }: NodeDetailsPanelProps) {
   if (!selectedNode) {
     return (
-      <aside className="h-full rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <aside className="mind-surface-panel h-full rounded-xl p-4">
         <h2 className="text-sm font-semibold text-slate-900">Node Settings</h2>
         <p className="mt-2 text-sm text-slate-500">
           Select any box on the map to edit title, notes, and AI settings.
@@ -47,7 +47,7 @@ export function NodeDetailsPanel({
   const runtimeStatus: NodeRuntimeStatus = data.runtime?.status || 'idle'
 
   return (
-    <aside className="h-full rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+    <aside className="mind-surface-panel h-full rounded-xl p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
           <h2 className="text-sm font-semibold text-slate-900">Node Settings</h2>
@@ -71,7 +71,7 @@ export function NodeDetailsPanel({
           <input
             value={data.label}
             onChange={(event) => onPatchNode(selectedNode.id, { label: event.target.value })}
-            className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm outline-none ring-blue-500 focus:ring-2"
+            className="mind-input-field mt-1 w-full rounded-md px-2 py-1.5 text-sm outline-none"
           />
         </label>
 
@@ -90,13 +90,13 @@ export function NodeDetailsPanel({
             value={data.notes || ''}
             onChange={(event) => onPatchNode(selectedNode.id, { notes: event.target.value })}
             rows={3}
-            className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm outline-none ring-blue-500 focus:ring-2"
+            className="mind-input-field mt-1 w-full rounded-md px-2 py-1.5 text-sm outline-none"
           />
         </label>
       </div>
 
       {isAI && (
-        <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3">
+        <div className="mt-4 rounded-lg border border-slate-200 bg-[#f9fbff] p-3">
           <div className="mb-2 flex items-center gap-2 text-xs font-semibold text-slate-700">
             <Cpu className="h-3.5 w-3.5" />
             AI Node Config
@@ -111,7 +111,7 @@ export function NodeDetailsPanel({
                   onPatchAIConfig(selectedNode.id, { systemPrompt: event.target.value })
                 }
                 rows={4}
-                className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm outline-none ring-blue-500 focus:ring-2"
+                className="mind-input-field mt-1 w-full rounded-md px-2 py-1.5 text-sm outline-none"
               />
               <FieldHint
                 active={!data.aiConfig?.systemPrompt?.trim()}
@@ -125,7 +125,7 @@ export function NodeDetailsPanel({
                 value={data.aiConfig?.model || ''}
                 onChange={(event) => onPatchAIConfig(selectedNode.id, { model: event.target.value })}
                 placeholder="e.g. gpt-4.1-mini"
-                className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm outline-none ring-blue-500 focus:ring-2"
+                className="mind-input-field mt-1 w-full rounded-md px-2 py-1.5 text-sm outline-none"
               />
               <FieldHint active={!data.aiConfig?.model?.trim()} value={globalDefaults.model || 'empty'} />
             </label>
@@ -143,7 +143,7 @@ export function NodeDetailsPanel({
                     temperature: event.target.value ? Number(event.target.value) : undefined,
                   })
                 }
-                className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm outline-none ring-blue-500 focus:ring-2"
+                className="mind-input-field mt-1 w-full rounded-md px-2 py-1.5 text-sm outline-none"
               />
               <FieldHint
                 active={typeof data.aiConfig?.temperature !== 'number'}
@@ -160,7 +160,7 @@ export function NodeDetailsPanel({
                     routing: (event.target.value || undefined) as NodeRoutingMode | undefined,
                   })
                 }
-                className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm outline-none ring-blue-500 focus:ring-2"
+                className="mind-input-field mt-1 w-full rounded-md px-2 py-1.5 text-sm outline-none"
               >
                 <option value="">Use global default</option>
                 <option value="direct">direct</option>
@@ -188,7 +188,7 @@ export function NodeDetailsPanel({
                         : event.target.value === 'true',
                   })
                 }
-                className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm outline-none ring-blue-500 focus:ring-2"
+                className="mind-input-field mt-1 w-full rounded-md px-2 py-1.5 text-sm outline-none"
               >
                 <option value="">Use global default</option>
                 <option value="true">enabled</option>
@@ -209,7 +209,7 @@ export function NodeDetailsPanel({
                     memoryScope: (event.target.value || undefined) as NodeMemoryScope | undefined,
                   })
                 }
-                className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm outline-none ring-blue-500 focus:ring-2"
+                className="mind-input-field mt-1 w-full rounded-md px-2 py-1.5 text-sm outline-none"
               >
                 <option value="">Use global default</option>
                 <option value="session">session</option>
@@ -225,7 +225,7 @@ export function NodeDetailsPanel({
                 value={data.aiConfig?.code || ''}
                 onChange={(event) => onPatchAIConfig(selectedNode.id, { code: event.target.value })}
                 rows={5}
-                className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 font-mono text-xs outline-none ring-blue-500 focus:ring-2"
+                className="mind-input-field mt-1 w-full rounded-md px-2 py-1.5 font-mono text-xs outline-none"
               />
             </label>
 
@@ -241,7 +241,7 @@ export function NodeDetailsPanel({
                     },
                   })
                 }
-                className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm outline-none ring-blue-500 focus:ring-2"
+                className="mind-input-field mt-1 w-full rounded-md px-2 py-1.5 text-sm outline-none"
               >
                 <option value="idle">idle</option>
                 <option value="queued">queued</option>

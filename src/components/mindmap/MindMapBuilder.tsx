@@ -435,10 +435,10 @@ export function MindMapBuilder() {
 
   return (
     <main className="mx-auto flex w-full max-w-[1700px] flex-col gap-3 px-3 py-3 sm:px-4 sm:py-4">
-      <header className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+      <header className="mind-surface-panel flex flex-wrap items-center justify-between gap-3 rounded-xl px-4 py-3">
         <div>
-          <h1 className="text-lg font-semibold text-slate-900 sm:text-xl">Mind Map Builder</h1>
-          <p className="text-xs text-slate-500">
+          <h1 className="text-lg font-semibold text-[#13223A] sm:text-xl">Mind Map Builder</h1>
+          <p className="text-xs text-[#5A6B83]">
             Draw, connect, annotate, and configure AI boxes directly on the map.
           </p>
         </div>
@@ -448,13 +448,13 @@ export function MindMapBuilder() {
             value={runInput}
             onChange={(event) => setRunInput(event.target.value)}
             placeholder="run input"
-            className="h-9 w-[220px] rounded-md border border-slate-300 px-2 text-sm outline-none ring-blue-500 focus:ring-2"
+            className="mind-input-field h-9 w-[220px] rounded-md px-2 text-sm outline-none"
           />
           <button
             type="button"
             onClick={() => void runValidation()}
             disabled={isValidating}
-            className="inline-flex h-9 items-center gap-1 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+            className="mind-tool-button inline-flex h-9 items-center gap-1 rounded-md px-3 text-sm disabled:opacity-60"
           >
             <RefreshCw className={`h-4 w-4 ${isValidating ? 'animate-spin' : ''}`} />
             Validate
@@ -463,7 +463,7 @@ export function MindMapBuilder() {
             type="button"
             onClick={() => void runMap()}
             disabled={isRunning}
-            className="inline-flex h-9 items-center gap-1 rounded-md bg-blue-600 px-3 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
+            className="inline-flex h-9 items-center gap-1 rounded-md bg-[#45658D] px-3 text-sm font-medium text-white hover:bg-[#3A5679] disabled:opacity-60"
           >
             <Play className="h-4 w-4" />
             Run
@@ -487,14 +487,14 @@ export function MindMapBuilder() {
             canRedo={canRedo}
           />
 
-          <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+          <div className="mind-surface-panel rounded-xl p-3">
             <p className="text-xs font-semibold text-slate-700">Drawing</p>
             <div className="mt-2 flex items-center gap-2">
               <input
                 type="color"
                 value={drawColor}
                 onChange={(event) => setDrawColor(event.target.value)}
-                className="h-8 w-10 rounded border border-slate-200"
+                className="h-8 w-10 rounded border border-slate-200 bg-white"
               />
               <input
                 type="number"
@@ -503,7 +503,7 @@ export function MindMapBuilder() {
                 step={0.5}
                 value={drawWidth}
                 onChange={(event) => setDrawWidth(Math.max(1, Math.min(8, Number(event.target.value) || 2)))}
-                className="h-8 w-20 rounded border border-slate-300 px-2 text-sm"
+                className="mind-input-field h-8 w-20 rounded px-2 text-sm outline-none"
               />
               <span className="text-xs text-slate-500">px</span>
             </div>
@@ -554,7 +554,7 @@ export function MindMapBuilder() {
             memoryRows={memoryRows}
           />
 
-          <section className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+          <section className="mind-surface-panel rounded-xl p-3">
             <h3 className="text-xs font-semibold text-slate-700">Run Output</h3>
             <pre className="mt-2 max-h-52 overflow-auto whitespace-pre-wrap text-xs text-slate-700">
               {runOutput || 'Run the map to see execution output here.'}

@@ -16,8 +16,8 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en">
-      <body className={`${inter.className} bg-[#F8FBFF] text-[#0F172A]`}>
+    <html lang="en" data-mind-motion="on">
+      <body className={`${inter.className} mind-app-body`}>
         <SuperTokensProvider>{children}</SuperTokensProvider>
       </body>
     </html>

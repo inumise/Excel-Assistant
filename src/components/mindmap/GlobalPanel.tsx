@@ -41,7 +41,7 @@ export function GlobalPanel({
   memoryRows,
 }: GlobalPanelProps) {
   return (
-    <aside className="rounded-xl border border-slate-200 bg-white shadow-sm">
+    <aside className="mind-surface-panel rounded-xl">
       <button
         type="button"
         onClick={onToggle}
@@ -63,7 +63,7 @@ export function GlobalPanel({
                 value={defaults.systemPrompt || ''}
                 onChange={(event) => onPatchDefaults({ systemPrompt: event.target.value })}
                 rows={3}
-                className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm outline-none ring-blue-500 focus:ring-2"
+                className="mind-input-field mt-1 w-full rounded-md px-2 py-1.5 text-sm outline-none"
               />
             </label>
 
@@ -72,7 +72,7 @@ export function GlobalPanel({
               <input
                 value={defaults.model || ''}
                 onChange={(event) => onPatchDefaults({ model: event.target.value })}
-                className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm outline-none ring-blue-500 focus:ring-2"
+                className="mind-input-field mt-1 w-full rounded-md px-2 py-1.5 text-sm outline-none"
               />
             </label>
 
@@ -89,7 +89,7 @@ export function GlobalPanel({
                     temperature: event.target.value ? Number(event.target.value) : undefined,
                   })
                 }
-                className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm outline-none ring-blue-500 focus:ring-2"
+                className="mind-input-field mt-1 w-full rounded-md px-2 py-1.5 text-sm outline-none"
               />
             </label>
 
@@ -98,7 +98,7 @@ export function GlobalPanel({
               <select
                 value={defaults.routing || 'direct'}
                 onChange={(event) => onPatchDefaults({ routing: event.target.value as typeof defaults.routing })}
-                className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm outline-none ring-blue-500 focus:ring-2"
+                className="mind-input-field mt-1 w-full rounded-md px-2 py-1.5 text-sm outline-none"
               >
                 <option value="direct">direct</option>
                 <option value="buffered">buffered</option>
@@ -111,7 +111,7 @@ export function GlobalPanel({
               <select
                 value={defaults.useMemoryVault ? 'true' : 'false'}
                 onChange={(event) => onPatchDefaults({ useMemoryVault: event.target.value === 'true' })}
-                className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm outline-none ring-blue-500 focus:ring-2"
+                className="mind-input-field mt-1 w-full rounded-md px-2 py-1.5 text-sm outline-none"
               >
                 <option value="false">disabled</option>
                 <option value="true">enabled</option>
@@ -125,7 +125,7 @@ export function GlobalPanel({
                 onChange={(event) =>
                   onPatchDefaults({ memoryScope: event.target.value as typeof defaults.memoryScope })
                 }
-                className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm outline-none ring-blue-500 focus:ring-2"
+                className="mind-input-field mt-1 w-full rounded-md px-2 py-1.5 text-sm outline-none"
               >
                 <option value="session">session</option>
                 <option value="workflow">workflow</option>

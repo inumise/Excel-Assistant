@@ -301,8 +301,22 @@ function MindMapCanvasInner({
     [document.strokes]
   )
 
+  const renderedEdges = useMemo(
+    () =>
+      document.edges.map((edge) => {
+        const messageType = edge.data?.messageType || 'prompt'
+        return {
+          ...edge,
+          type: 'default',
+          className: ['mind-edge', `mind-edge--${messageType}`, edge.className || ''].join(' ').trim(),
+          label: typeof edge.label === 'string' ? edge.label : messageType,
+        } satisfies MindMapEdge
+      }),
+    [document.edges]
+  )
+
   return (
-    <div className="relative h-full min-h-[620px] w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+    <div className="mind-canvas-shell relative h-full min-h-[620px] w-full overflow-hidden rounded-xl">
       <div
         ref={wrapperRef}
         className="absolute inset-0"
@@ -313,9 +327,15 @@ function MindMapCanvasInner({
         onPointerUp={onDrawPointerUp}
         onPointerLeave={onDrawPointerUp}
       >
+        <div className="mind-wave-layer" aria-hidden>
+          <div className="mind-wave-band mind-wave-band--blue" />
+          <div className="mind-wave-band mind-wave-band--violet" />
+          <div className="mind-wave-band mind-wave-band--teal" />
+        </div>
+
         <ReactFlow
           nodes={document.nodes}
-          edges={document.edges}
+          edges={renderedEdges}
           nodeTypes={nodeTypes}
           onInit={(instance) => onFlowReady(instance as ReactFlowInstance<MindMapNode, MindMapEdge>)}
           onNodesChange={onNodesChange}
@@ -335,9 +355,12 @@ function MindMapCanvasInner({
           nodesConnectable={activeTool === 'select'}
           elementsSelectable={activeTool === 'select'}
           deleteKeyCode={activeTool === 'select' ? ['Backspace', 'Delete'] : null}
+          className="mind-reactflow"
+          defaultEdgeOptions={{ type: 'default' }}
+          connectionLineStyle={{ stroke: 'var(--mind-edge-hover)', strokeWidth: 1.8 }}
           proOptions={{ hideAttribution: true }}
         >
-          <Background variant={BackgroundVariant.Dots} color="#cbd5e1" gap={18} size={1.2} />
+          <Background variant={BackgroundVariant.Dots} color="var(--mind-grid-dot)" gap={24} size={0.85} />
           <Controls showInteractive={false} />
         </ReactFlow>
 

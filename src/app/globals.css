@@ -24,6 +24,39 @@
     --input: 214.3 31.8% 91.4%;
     --ring: 221 83% 53%;
     --radius: 0.75rem;
+
+    /* Mind-map visual system */
+    --mind-bg: #f5f7fb;
+    --mind-bg-accent: #f8faff;
+    --mind-surface: #ffffff;
+    --mind-surface-soft: #fbfcff;
+    --mind-border: #d9e1ec;
+    --mind-border-strong: #c5d1e2;
+    --mind-text: #172538;
+    --mind-text-muted: #54657d;
+
+    --mind-accent-blue: #3f5f81;
+    --mind-accent-violet: #5c517e;
+    --mind-accent-teal: #3f7071;
+    --mind-accent-error: #a26356;
+
+    --mind-edge-prompt: #4a5f7c;
+    --mind-edge-context: #4d6d79;
+    --mind-edge-code: #5e5a81;
+    --mind-edge-event: #4e677f;
+    --mind-edge-memory: #496983;
+    --mind-edge-api: #4f6380;
+    --mind-edge-ai: #5f5b84;
+    --mind-edge-hover: #627fa7;
+    --mind-edge-active: #6f90be;
+
+    --mind-grid-dot: rgba(67, 84, 113, 0.11);
+
+    --mind-motion-wave-duration-a: 160s;
+    --mind-motion-wave-duration-b: 210s;
+    --mind-motion-wave-duration-c: 260s;
+    --mind-motion-node-pulse: 8.5s;
+    --mind-motion-edge-flow: 10s;
   }
 }
 
@@ -37,125 +70,264 @@
 }
 
 body {
-  background:
-    radial-gradient(circle at 10% -10%, rgba(59, 130, 246, 0.2), transparent 40%),
-    radial-gradient(circle at 95% 15%, rgba(147, 51, 234, 0.2), transparent 38%),
-    radial-gradient(circle at 70% 100%, rgba(236, 72, 153, 0.14), transparent 42%),
-    linear-gradient(160deg, #f8fbff 0%, #ffffff 48%, #f8fbff 100%);
+  background: linear-gradient(165deg, var(--mind-bg) 0%, var(--mind-bg-accent) 48%, var(--mind-bg) 100%);
   min-height: 100vh;
+  color: var(--mind-text);
 }
 
 .react-flow__attribution {
   display: none;
 }
 
-@keyframes rgbBorderFlow {
+.mind-app-body {
+  background: linear-gradient(165deg, var(--mind-bg) 0%, var(--mind-bg-accent) 48%, var(--mind-bg) 100%);
+  color: var(--mind-text);
+}
+
+.mind-surface-panel {
+  border: 1px solid var(--mind-border);
+  background: var(--mind-surface);
+  box-shadow: 0 8px 24px rgba(22, 34, 53, 0.055);
+}
+
+.mind-input-field {
+  border: 1px solid var(--mind-border-strong);
+  background: var(--mind-surface-soft);
+  color: var(--mind-text);
+}
+
+.mind-input-field:focus {
+  border-color: color-mix(in srgb, var(--mind-accent-blue) 62%, #d2dbe9);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--mind-accent-blue) 16%, transparent);
+}
+
+@keyframes mindWaveDriftA {
   0% {
-    background-position: 0% 50%;
+    transform: translate3d(-8%, -4%, 0) scale(1);
   }
   50% {
-    background-position: 100% 50%;
+    transform: translate3d(9%, 5%, 0) scale(1.03);
   }
   100% {
-    background-position: 0% 50%;
+    transform: translate3d(-8%, -4%, 0) scale(1);
   }
 }
 
-@keyframes rgbWaveShift {
+@keyframes mindWaveDriftB {
   0% {
-    background-position: 0 0, 0 0, 0 0;
+    transform: translate3d(8%, -8%, 0) scale(1.06);
+  }
+  50% {
+    transform: translate3d(-11%, 7%, 0) scale(1.02);
   }
   100% {
-    background-position: 220px 160px, -140px 120px, 100px 180px;
+    transform: translate3d(8%, -8%, 0) scale(1.06);
   }
 }
 
-@keyframes edgeSignalTravel {
+@keyframes mindWaveDriftC {
   0% {
-    stroke-dashoffset: 18;
+    transform: translate3d(-6%, 7%, 0) scale(1.04);
+  }
+  50% {
+    transform: translate3d(7%, -8%, 0) scale(1);
   }
   100% {
-    stroke-dashoffset: -18;
+    transform: translate3d(-6%, 7%, 0) scale(1.04);
   }
 }
 
-.rgb-glow-card {
-  position: relative;
-  isolation: isolate;
-  background: rgba(255, 255, 255, 0.88);
-  border: 1px solid rgba(37, 99, 235, 0.28);
-  backdrop-filter: blur(8px);
+@keyframes mindEdgeFlow {
+  0% {
+    stroke-dashoffset: 0;
+  }
+  100% {
+    stroke-dashoffset: -26;
+  }
 }
 
-.rgb-glow-card::before {
-  content: "";
-  position: absolute;
-  inset: -1px;
-  border-radius: inherit;
-  background: linear-gradient(120deg, #2563eb, #7c3aed, #ec4899, #0ea5e9, #2563eb);
-  background-size: 280% 280%;
-  animation: rgbBorderFlow 10s linear infinite;
-  z-index: -1;
-  opacity: 0.35;
+@keyframes mindNodePulse {
+  0%,
+  100% {
+    opacity: 0.16;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.33;
+    transform: scale(1.018);
+  }
 }
 
-.rgb-worker-card {
-  border: 1px solid rgba(59, 130, 246, 0.22);
-  background: rgba(255, 255, 255, 0.92);
+.mind-canvas-shell {
+  border: 1px solid var(--mind-border);
+  background: var(--mind-surface);
+  box-shadow: 0 12px 36px rgba(22, 34, 53, 0.07);
 }
 
-.rgb-worker-card:hover {
-  box-shadow:
-    0 0 0 1px rgba(99, 102, 241, 0.28),
-    0 0 20px rgba(59, 130, 246, 0.18);
-}
-
-.rgb-wave-space {
-  background:
-    radial-gradient(circle at 20% 20%, rgba(96, 165, 250, 0.22), transparent 28%),
-    radial-gradient(circle at 80% 10%, rgba(217, 70, 239, 0.2), transparent 30%),
-    radial-gradient(circle at 50% 90%, rgba(14, 165, 233, 0.2), transparent 35%),
-    linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(248, 250, 252, 0.96));
-  animation: rgbWaveShift 18s linear infinite;
-}
-
-.owner-schematic-grid::after {
-  content: "";
+.mind-wave-layer {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background-image:
-    linear-gradient(to right, rgba(30, 64, 175, 0.08) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(15, 23, 42, 0.08) 1px, transparent 1px);
-  background-size: 44px 44px;
+  overflow: hidden;
+  z-index: 0;
 }
 
-.rgb-node-shell {
+.mind-wave-band {
+  position: absolute;
+  width: 140%;
+  height: 140%;
+  border-radius: 50%;
+  opacity: 0.22;
+  will-change: transform;
+}
+
+.mind-wave-band--blue {
+  top: -42%;
+  left: -20%;
+  background: radial-gradient(circle at 35% 40%, rgba(90, 130, 183, 0.26), transparent 62%);
+  animation: mindWaveDriftA var(--mind-motion-wave-duration-a) ease-in-out infinite;
+}
+
+.mind-wave-band--violet {
+  top: -26%;
+  right: -38%;
+  background: radial-gradient(circle at 52% 48%, rgba(116, 96, 162, 0.23), transparent 66%);
+  animation: mindWaveDriftB var(--mind-motion-wave-duration-b) ease-in-out infinite;
+}
+
+.mind-wave-band--teal {
+  bottom: -48%;
+  left: -18%;
+  background: radial-gradient(circle at 44% 46%, rgba(87, 140, 145, 0.24), transparent 65%);
+  animation: mindWaveDriftC var(--mind-motion-wave-duration-c) ease-in-out infinite;
+}
+
+.mind-reactflow {
+  position: relative;
+  z-index: 1;
+}
+
+.mind-node-card {
   position: relative;
   isolation: isolate;
-  background: rgba(255, 255, 255, 0.95);
-  border: 1px solid rgba(99, 102, 241, 0.3);
+  border: 1px solid var(--mind-border-strong);
+  background: color-mix(in srgb, var(--mind-surface) 92%, #eff4fb);
 }
 
-.rgb-node-shell::before {
-  content: "";
+.mind-node-card::after {
+  content: '';
   position: absolute;
   inset: -1px;
   border-radius: inherit;
-  background: linear-gradient(110deg, #2563eb, #7c3aed, #ec4899, #14b8a6, #2563eb);
-  background-size: 320% 320%;
-  animation: rgbBorderFlow 12s linear infinite;
-  opacity: 0.28;
+  pointer-events: none;
   z-index: -1;
+  background: radial-gradient(circle at 28% 26%, rgba(88, 112, 157, 0.24), transparent 62%);
+  opacity: 0.14;
+}
+
+.mind-node-card--selected {
+  border-color: color-mix(in srgb, var(--mind-accent-blue) 58%, #ccd8e8);
+  box-shadow: 0 0 0 2px rgba(92, 118, 160, 0.16);
+}
+
+.mind-node-card--running::after {
+  background: radial-gradient(circle at 30% 30%, rgba(80, 121, 181, 0.34), transparent 64%);
+  animation: mindNodePulse var(--mind-motion-node-pulse) ease-in-out infinite;
+}
+
+.mind-node-card--error {
+  border-color: color-mix(in srgb, var(--mind-accent-error) 72%, #d8bdb7);
+}
+
+.mind-node-card--error::after {
+  opacity: 0.26;
+  background: radial-gradient(circle at 30% 30%, rgba(162, 99, 86, 0.28), transparent 64%);
+}
+
+.mind-tool-button {
+  border: 1px solid var(--mind-border);
+  background: var(--mind-surface);
+  color: #34445c;
+  transition: background-color 180ms ease, border-color 180ms ease, color 180ms ease;
+}
+
+.mind-tool-button:hover {
+  background: #f8faff;
+  border-color: var(--mind-border-strong);
+}
+
+.mind-tool-button--active {
+  border-color: color-mix(in srgb, var(--mind-accent-blue) 65%, #d0dbe8);
+  background: color-mix(in srgb, var(--mind-accent-blue) 10%, #ffffff);
+  color: color-mix(in srgb, var(--mind-accent-blue) 90%, #1d2f43);
 }
 
 .react-flow__controls button {
-  background: white !important;
-  color: #0f172a !important;
-  border-color: #cbd5e1 !important;
+  background: var(--mind-surface) !important;
+  color: #32455e !important;
+  border-color: var(--mind-border) !important;
+}
+
+.react-flow__edge.mind-edge .react-flow__edge-path {
+  stroke-width: 1.65;
+  stroke-linecap: round;
+  transition: stroke 220ms ease, filter 220ms ease, stroke-width 220ms ease;
+}
+
+.react-flow__edge.mind-edge:hover .react-flow__edge-path {
+  stroke: var(--mind-edge-hover);
+  stroke-width: 1.95;
+  filter: drop-shadow(0 0 3px rgba(106, 132, 169, 0.28));
+}
+
+.react-flow__edge.selected.mind-edge .react-flow__edge-path {
+  stroke: var(--mind-edge-active);
+  stroke-dasharray: 10 8;
+  animation: mindEdgeFlow var(--mind-motion-edge-flow) linear infinite;
+}
+
+.react-flow__edge.mind-edge--prompt .react-flow__edge-path {
+  stroke: var(--mind-edge-prompt);
+}
+.react-flow__edge.mind-edge--context .react-flow__edge-path {
+  stroke: var(--mind-edge-context);
+}
+.react-flow__edge.mind-edge--code .react-flow__edge-path {
+  stroke: var(--mind-edge-code);
+}
+.react-flow__edge.mind-edge--event .react-flow__edge-path {
+  stroke: var(--mind-edge-event);
+}
+.react-flow__edge.mind-edge--memory .react-flow__edge-path {
+  stroke: var(--mind-edge-memory);
+}
+.react-flow__edge.mind-edge--api .react-flow__edge-path {
+  stroke: var(--mind-edge-api);
+}
+.react-flow__edge.mind-edge--ai .react-flow__edge-path {
+  stroke: var(--mind-edge-ai);
+}
+
+html[data-mind-motion='off'] .mind-wave-band,
+html[data-mind-motion='off'] .mind-node-card--running::after,
+html[data-mind-motion='off'] .react-flow__edge.selected.mind-edge .react-flow__edge-path {
+  animation: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mind-wave-band,
+  .mind-node-card--running::after,
+  .react-flow__edge.selected.mind-edge .react-flow__edge-path {
+    animation: none !important;
+  }
+
+  .mind-tool-button,
+  .mind-node-card,
+  .react-flow__edge.mind-edge .react-flow__edge-path {
+    transition: none !important;
+  }
 }
 
 .react-flow__edge.edge-pulse-signal .react-flow__edge-path {
-  animation: edgeSignalTravel 0.7s linear infinite;
   stroke-linecap: round;
 }

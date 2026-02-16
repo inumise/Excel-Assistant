@@ -18,7 +18,7 @@ function templateIcon(templateId: string) {
 
 export function WorkerCatalog({ onAddTemplate }: WorkerCatalogProps) {
   return (
-    <aside className="w-full rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+    <aside className="mind-surface-panel w-full rounded-xl p-3">
       <h2 className="text-sm font-semibold text-slate-900">Node Catalog</h2>
       <p className="mt-1 text-xs text-slate-500">
         Drag onto the canvas or click to insert near center.

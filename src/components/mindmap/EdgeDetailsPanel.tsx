@@ -12,7 +12,7 @@ interface EdgeDetailsPanelProps {
 export function EdgeDetailsPanel({ selectedEdge, onPatchEdge, onDeleteEdge }: EdgeDetailsPanelProps) {
   if (!selectedEdge) {
     return (
-      <aside className="h-full rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <aside className="mind-surface-panel h-full rounded-xl p-4">
         <h2 className="text-sm font-semibold text-slate-900">Edge Settings</h2>
         <p className="mt-2 text-sm text-slate-500">
           Select a connection line to configure message type and channel.
@@ -22,7 +22,7 @@ export function EdgeDetailsPanel({ selectedEdge, onPatchEdge, onDeleteEdge }: Ed
   }
 
   return (
-    <aside className="h-full rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+    <aside className="mind-surface-panel h-full rounded-xl p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
           <h2 className="text-sm font-semibold text-slate-900">Edge Settings</h2>
@@ -54,7 +54,7 @@ export function EdgeDetailsPanel({ selectedEdge, onPatchEdge, onDeleteEdge }: Ed
                 },
               })
             }
-            className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm outline-none ring-blue-500 focus:ring-2"
+            className="mind-input-field mt-1 w-full rounded-md px-2 py-1.5 text-sm outline-none"
           >
             {EDGE_MESSAGE_TYPES.map((type) => (
               <option key={type} value={type}>
@@ -77,7 +77,7 @@ export function EdgeDetailsPanel({ selectedEdge, onPatchEdge, onDeleteEdge }: Ed
               })
             }
             placeholder="default"
-            className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm outline-none ring-blue-500 focus:ring-2"
+            className="mind-input-field mt-1 w-full rounded-md px-2 py-1.5 text-sm outline-none"
           />
         </label>
       </div>

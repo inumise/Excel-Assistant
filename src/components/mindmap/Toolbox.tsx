@@ -43,10 +43,8 @@ function ToolButton({ title, active = false, onClick, disabled = false, children
       onClick={onClick}
       disabled={disabled}
       className={[
-        'inline-flex h-10 w-10 items-center justify-center rounded-lg border text-slate-700 transition',
-        active
-          ? 'border-blue-400 bg-blue-50 text-blue-700'
-          : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50',
+        'mind-tool-button inline-flex h-10 w-10 items-center justify-center rounded-lg text-slate-700',
+        active ? 'mind-tool-button--active' : '',
         disabled ? 'cursor-not-allowed opacity-40' : '',
       ].join(' ')}
     >
@@ -76,7 +74,7 @@ export function Toolbox({
   canRedo,
 }: ToolboxProps) {
   return (
-    <div className="flex flex-col gap-2 rounded-xl border border-slate-200 bg-white p-2 shadow-sm">
+    <div className="mind-surface-panel flex flex-col gap-2 rounded-xl p-2">
       {TOOL_DEFINITIONS.map((tool) => (
         <ToolButton
           key={tool.id}

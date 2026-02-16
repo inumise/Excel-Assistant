@@ -24,10 +24,10 @@ function roleIcon(kind: MindMapNodeData['nodeKind']) {
 
 function runtimeBadge(status: NodeRuntimeStatus | undefined) {
   if (!status || status === 'idle') return 'bg-slate-100 text-slate-600'
-  if (status === 'queued') return 'bg-amber-100 text-amber-700'
-  if (status === 'running') return 'bg-blue-100 text-blue-700'
-  if (status === 'success') return 'bg-emerald-100 text-emerald-700'
-  return 'bg-red-100 text-red-700'
+  if (status === 'queued') return 'bg-amber-50 text-amber-700'
+  if (status === 'running') return 'bg-indigo-50 text-indigo-700'
+  if (status === 'success') return 'bg-emerald-50 text-emerald-700'
+  return 'bg-orange-50 text-orange-700'
 }
 
 export const MindMapNodeCard = memo(function MindMapNodeCard({
@@ -36,25 +36,28 @@ export const MindMapNodeCard = memo(function MindMapNodeCard({
   data,
 }: NodeProps<MindMapNodeData>) {
   const isAI = data.nodeKind === 'ai'
+  const runtimeStatus = data.runtime?.status || 'idle'
 
   return (
     <div
       className={[
-        'min-w-[170px] max-w-[280px] rounded-xl border bg-white p-3 shadow-sm transition',
-        selected
-          ? 'border-blue-400 ring-2 ring-blue-200'
-          : 'border-slate-200 hover:border-slate-300 hover:shadow-md',
+        'mind-node-card min-w-[170px] max-w-[280px] rounded-xl p-3 shadow-sm transition',
+        selected ? 'mind-node-card--selected' : '',
+        runtimeStatus === 'running' ? 'mind-node-card--running' : '',
+        runtimeStatus === 'error' ? 'mind-node-card--error' : '',
       ].join(' ')}
     >
       <Handle
         type="target"
         position={Position.Left}
-        className="!h-3 !w-3 !border !border-slate-900 !bg-black"
+        className="!h-3 !w-3 !border"
+        style={{ background: '#1f2937', borderColor: '#111827' }}
       />
       <Handle
         type="source"
         position={Position.Right}
-        className="!h-3 !w-3 !border !border-red-900 !bg-red-500"
+        className="!h-3 !w-3 !border"
+        style={{ background: '#3f7071', borderColor: '#355d5e' }}
       />
 
       <div className="flex items-center gap-2 text-slate-700">
