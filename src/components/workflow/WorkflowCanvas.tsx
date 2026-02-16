@@ -150,6 +150,7 @@ interface SystemHealthResponse {
 }
 
 type OwnerPanelMode = 'prompts' | 'todo' | 'output' | 'inspect'
+type LayoutPreset = 'focus' | 'balanced' | 'wide'
 
 interface SettingsResponse {
   settings?: UserAISettings
@@ -556,7 +557,8 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
   const [workflows, setWorkflows] = useState<Workflow[]>([])
   const [activeWorkflowId, setActiveWorkflowId] = useState('')
   const [ownerPanelMode, setOwnerPanelMode] = useState<OwnerPanelMode>('prompts')
-  const [showAdvancedMenu, setShowAdvancedMenu] = useState(false)
+  const [showAdvancedMenu, setShowAdvancedMenu] = useState(true)
+  const [layoutPreset, setLayoutPreset] = useState<LayoutPreset>('focus')
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
   const [collapsedNodeIds, setCollapsedNodeIds] = useState<string[]>([])
   const [librarySearch, setLibrarySearch] = useState('')
@@ -577,6 +579,7 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
   const [isLoadingPrompts, setIsLoadingPrompts] = useState(false)
   const [isSavingPrompts, setIsSavingPrompts] = useState(false)
   const [runOutput, setRunOutput] = useState('')
+  const [runningThoughts, setRunningThoughts] = useState<string[]>([])
   const [auditRows, setAuditRows] = useState<
     Array<{ id: string; action: string; createdAt: string; payload: Record<string, unknown> }>
   >([])
@@ -625,6 +628,13 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
     () => (selectedNodeId ? nodes.find((node) => node.id === selectedNodeId) || null : null),
     [nodes, selectedNodeId]
   )
+
+  const layoutGridClass =
+    layoutPreset === 'balanced'
+      ? 'lg:grid-cols-[300px_minmax(0,1fr)_360px]'
+      : layoutPreset === 'wide'
+      ? 'lg:grid-cols-[360px_minmax(0,1fr)_360px]'
+      : 'lg:grid-cols-[260px_minmax(0,1fr)_420px]'
 
   const filteredLibrary = useMemo(() => {
     const query = librarySearch.trim().toLowerCase()
@@ -1526,6 +1536,12 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
   const runWorkflow = useCallback(async () => {
     if (!activeWorkflow) return
     setIsRunning(true)
+    setRunningThoughts((prev) => [
+      'Preparing workflow run...',
+      `Workflow: ${activeWorkflow.name}`,
+      `Command: ${runInput}`,
+      ...prev.slice(0, 2),
+    ])
     try {
       const response = await fetch(`/api/workflows/${activeWorkflow.id}/run`, {
         method: 'POST',
@@ -1543,6 +1559,16 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
       const communications = Array.isArray(data.communications) ? data.communications : []
       setLastRunCommunications(communications)
       setRunOutput(data.output || data.message || 'No output')
+      setRunningThoughts(() => {
+        const lines = (data.output || data.message || '')
+          .split('\n')
+          .map((line) => line.replace(/^•\s*/, '').trim())
+          .filter(Boolean)
+          .slice(0, 8)
+        return lines.length > 0
+          ? lines
+          : ['Workflow completed with no detailed thought lines.', `Communications: ${communications.length}`]
+      })
       playCommunicationSignals(communications)
       await fetchMemory()
       if (data.validation) {
@@ -1563,9 +1589,11 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
       }
       await fetchSystemHealth()
     } catch (error) {
-      setRunOutput(error instanceof Error ? error.message : 'Workflow execution failed.')
+      const message = error instanceof Error ? error.message : 'Workflow execution failed.'
+      setRunOutput(message)
+      setRunningThoughts((prev) => [`Run error: ${message}`, ...prev.slice(0, 5)])
       pushToast(
-        error instanceof Error ? error.message : 'Workflow execution failed.',
+        message,
         'error'
       )
     } finally {
@@ -1621,6 +1649,10 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
     setLastRunCommunications(events)
     playCommunicationSignals(events)
     setRunOutput(`Signal storm simulation ran with ${events.length} synthetic pulses.`)
+    setRunningThoughts([
+      `Synthetic signal storm started (${events.length} pulses).`,
+      'Use this to visually test communication links.',
+    ])
     pushToast(`Signal storm launched: ${events.length} pulses.`, 'success')
   }, [edges, playCommunicationSignals, pushToast])
 
@@ -1631,6 +1663,7 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
     setCollapsedNodeIds([])
     setIsDirty(true)
     setRunOutput('Board cleared. Drag AI workers from the left to start.')
+    setRunningThoughts(['Board reset completed.', 'Drag a worker card into the map to begin.'])
     pushToast('Board reset to empty schematic map.', 'success')
   }, [pushToast, setEdges, setNodes])
 
@@ -1819,6 +1852,24 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
               New Empty Map
             </Button>
             <Button
+              className={`h-9 ${layoutPreset === 'focus' ? 'bg-[#1D4ED8] text-white' : 'bg-white text-[#1E293B]'} hover:bg-[#1E40AF] hover:text-white`}
+              onClick={() => setLayoutPreset('focus')}
+            >
+              Focus Map
+            </Button>
+            <Button
+              className={`h-9 ${layoutPreset === 'balanced' ? 'bg-[#1D4ED8] text-white' : 'bg-white text-[#1E293B]'} hover:bg-[#1E40AF] hover:text-white`}
+              onClick={() => setLayoutPreset('balanced')}
+            >
+              Balanced
+            </Button>
+            <Button
+              className={`h-9 ${layoutPreset === 'wide' ? 'bg-[#1D4ED8] text-white' : 'bg-white text-[#1E293B]'} hover:bg-[#1E40AF] hover:text-white`}
+              onClick={() => setLayoutPreset('wide')}
+            >
+              Wide Menu
+            </Button>
+            <Button
               className="h-9 bg-white text-[#1E293B] hover:bg-[#F8FAFC]"
               onClick={() => setShowAdvancedMenu((prev) => !prev)}
             >
@@ -1891,7 +1942,7 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
         </section>
 
         <div className="overflow-x-auto pb-2">
-          <div className="grid min-w-[1180px] gap-4 lg:grid-cols-[320px_minmax(0,1fr)_320px]">
+          <div className={`grid min-w-[1180px] gap-4 ${layoutGridClass}`}>
             <aside className="rgb-glow-card space-y-3 rounded-3xl p-4">
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-semibold text-[#0F172A]">AI Worker List</h3>
@@ -2194,8 +2245,14 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
                 </div>
               </div>
 
-              {ownerPanelMode === 'prompts' && (
-                <div className="space-y-2 rounded-xl border border-[#BFDBFE] bg-[#EFF6FF] p-3">
+              <div
+                className={`space-y-2 rounded-xl border bg-[#EFF6FF] p-3 ${
+                  ownerPanelMode === 'prompts'
+                    ? 'border-[#1D4ED8] ring-2 ring-[#1D4ED8]/25'
+                    : 'border-[#BFDBFE]'
+                }`}
+                onClick={() => setOwnerPanelMode('prompts')}
+              >
                   <div className="flex items-center justify-between">
                     <p className="text-xs font-semibold text-[#1D4ED8]">Prompt Control</p>
                     {isLoadingPrompts && <Loader2 className="h-3.5 w-3.5 animate-spin text-[#1D4ED8]" />}
@@ -2246,11 +2303,16 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
                       Apply to all AIs
                     </Button>
                   </div>
-                </div>
-              )}
+              </div>
 
-              {ownerPanelMode === 'todo' && (
-                <div className="space-y-2 rounded-xl border border-[#A7F3D0] bg-[#ECFDF5] p-3">
+              <div
+                className={`space-y-2 rounded-xl border bg-[#ECFDF5] p-3 ${
+                  ownerPanelMode === 'todo'
+                    ? 'border-[#059669] ring-2 ring-[#059669]/25'
+                    : 'border-[#A7F3D0]'
+                }`}
+                onClick={() => setOwnerPanelMode('todo')}
+              >
                   <p className="text-xs font-semibold text-[#065F46]">Owner Todo + Async Manager</p>
                   <label className="text-[11px] text-[#065F46]">TODO</label>
                   <textarea
@@ -2271,41 +2333,64 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
                   <Button size="sm" className="h-8 bg-[#059669] text-white hover:bg-[#047857]" onClick={saveOwnerNotes}>
                     Save Todo/Async
                   </Button>
+              </div>
+
+              <div
+                className={`space-y-2 rounded-xl border bg-[#EEF2FF] p-3 ${
+                  ownerPanelMode === 'output'
+                    ? 'border-[#4338CA] ring-2 ring-[#4338CA]/25'
+                    : 'border-[#C7D2FE]'
+                }`}
+                onClick={() => setOwnerPanelMode('output')}
+              >
+                <div className="rounded-lg border border-[#BFDBFE] bg-[#EFF6FF] p-3">
+                  <p className="mb-1 text-xs font-semibold text-[#1D4ED8]">Live Task Output</p>
+                  <pre className="max-h-24 overflow-auto whitespace-pre-wrap text-[11px] text-[#1F2937]">
+                    {runOutput || 'No execution yet.'}
+                  </pre>
                 </div>
-              )}
-
-              {ownerPanelMode === 'output' && (
-                <>
-                  <div className="rounded-xl border border-[#BFDBFE] bg-[#EFF6FF] p-3">
-                    <p className="mb-1 text-xs font-semibold text-[#1D4ED8]">Live Task Output</p>
-                    <pre className="max-h-28 overflow-auto whitespace-pre-wrap text-[11px] text-[#1F2937]">
-                      {runOutput || 'No execution yet.'}
-                    </pre>
+                <div className="rounded-lg border border-[#BFDBFE] bg-[#EFF6FF] p-3">
+                  <p className="mb-1 text-xs font-semibold text-[#1D4ED8]">Running Thoughts</p>
+                  <div className="max-h-24 space-y-1 overflow-auto">
+                    {runningThoughts.length === 0 && (
+                      <p className="text-[11px] text-[#475569]">Run workflow to see live thought lines.</p>
+                    )}
+                    {runningThoughts.map((line, index) => (
+                      <p key={`${line}-${index}`} className="text-[11px] text-[#1F2937]">
+                        • {line}
+                      </p>
+                    ))}
                   </div>
-                  <div className="rounded-xl border border-[#C7D2FE] bg-[#EEF2FF] p-3">
-                    <p className="mb-1 text-xs font-semibold text-[#4338CA]">Recent Activity</p>
-                    <div className="max-h-28 space-y-2 overflow-auto">
-                      {auditRows.length === 0 && <p className="text-[11px] text-[#475569]">No entries yet.</p>}
-                      {auditRows.slice(0, 6).map((row) => (
-                        <div key={row.id} className="rounded border border-[#E2E8F0] bg-white p-2">
-                          <div className="text-[11px] font-medium text-[#1E3A8A]">{row.action}</div>
-                          <div className="text-[10px] text-[#475569]">{new Date(row.createdAt).toLocaleString()}</div>
-                        </div>
-                      ))}
-                    </div>
+                </div>
+                <div className="rounded-lg border border-[#C7D2FE] bg-white p-3">
+                  <p className="mb-1 text-xs font-semibold text-[#4338CA]">Recent Activity</p>
+                  <div className="max-h-24 space-y-2 overflow-auto">
+                    {auditRows.length === 0 && <p className="text-[11px] text-[#475569]">No entries yet.</p>}
+                    {auditRows.slice(0, 6).map((row) => (
+                      <div key={row.id} className="rounded border border-[#E2E8F0] bg-white p-2">
+                        <div className="text-[11px] font-medium text-[#1E3A8A]">{row.action}</div>
+                        <div className="text-[10px] text-[#475569]">{new Date(row.createdAt).toLocaleString()}</div>
+                      </div>
+                    ))}
                   </div>
-                </>
-              )}
+                </div>
+              </div>
 
-              {ownerPanelMode === 'inspect' && (
-                <>
-                  {!selectedNode && (
-                    <div className="rounded-xl border border-dashed border-[#CBD5E1] bg-white p-3 text-xs text-[#64748B]">
-                      Select a block to edit worker settings and code.
-                    </div>
-                  )}
-                  {selectedNode && (
-                    <div className="space-y-2 rounded-xl border border-[#CBD5E1] bg-white p-3">
+              <div
+                className={`space-y-2 rounded-xl border bg-white p-3 ${
+                  ownerPanelMode === 'inspect'
+                    ? 'border-[#7C3AED] ring-2 ring-[#7C3AED]/20'
+                    : 'border-[#CBD5E1]'
+                }`}
+                onClick={() => setOwnerPanelMode('inspect')}
+              >
+                {!selectedNode && (
+                  <div className="rounded-xl border border-dashed border-[#CBD5E1] bg-white p-3 text-xs text-[#64748B]">
+                    Select a block to edit worker settings and code.
+                  </div>
+                )}
+                {selectedNode && (
+                  <div className="space-y-2 rounded-xl border border-[#CBD5E1] bg-white p-3">
                       <label className="text-[11px] text-[#334155]">Node label</label>
                       <Input
                         value={selectedNode.data.label}
@@ -2430,10 +2515,9 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
                           </select>
                         </div>
                       )}
-                    </div>
-                  )}
-                </>
-              )}
+                  </div>
+                )}
+              </div>
 
               {showAdvancedMenu && (
                 <>
