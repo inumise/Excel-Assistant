@@ -13,6 +13,10 @@ import { NodeDetailsPanel } from '@/components/mindmap/NodeDetailsPanel'
 import { Toolbox } from '@/components/mindmap/Toolbox'
 import { WorkerCatalog } from '@/components/mindmap/WorkerCatalog'
 import {
+  buildWorkforceBlueprint,
+  listWorkforceBlueprints,
+} from '@/components/mindmap/workforce-blueprints'
+import {
   MindMapEdge,
   MindMapNode,
   MindMapTool,
@@ -40,6 +44,7 @@ export function MindMapBuilder() {
   const [runInput, setRunInput] = useState('run this map')
   const [runOutput, setRunOutput] = useState('')
   const [isRunning, setIsRunning] = useState(false)
+  const [isBuildingBlueprint, setIsBuildingBlueprint] = useState(false)
   const [isValidating, setIsValidating] = useState(false)
   const [validationSummary, setValidationSummary] = useState<string>('')
   const [nodeIssuesById, setNodeIssuesById] = useState<Record<string, string[]>>({})
@@ -52,6 +57,9 @@ export function MindMapBuilder() {
   >([])
   const [sessionId] = useState(() => crypto.randomUUID())
   const [flowInstance, setFlowInstance] = useState<ReactFlowInstance<MindMapNode, MindMapEdge> | null>(null)
+
+  const blueprintOptions = useMemo(() => listWorkforceBlueprints(), [])
+  const [selectedBlueprintId, setSelectedBlueprintId] = useState<string>(blueprintOptions[0]?.id || 'lean-core')
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -227,6 +235,60 @@ export function MindMapBuilder() {
     },
     [flowInstance, updateDocument]
   )
+
+  const clearCatalogDragState = useCallback(() => {
+    setIsCatalogDragging(false)
+    setDragTemplateId(null)
+  }, [])
+
+  const applyWorkforceBlueprint = useCallback(
+    (replaceCurrent: boolean) => {
+      setIsBuildingBlueprint(true)
+      try {
+        const origin = flowInstance
+          ? flowInstance.screenToFlowPosition({
+              x: window.innerWidth * 0.52,
+              y: window.innerHeight * 0.44,
+            })
+          : { x: 120, y: 120 }
+        const generated = buildWorkforceBlueprint({
+          blueprintId: selectedBlueprintId as 'lean-core' | 'growth-pod' | 'enterprise-grid',
+          origin,
+        })
+
+        updateDocument(
+          (previous) => ({
+            ...previous,
+            nodes: replaceCurrent ? generated.nodes : [...previous.nodes, ...generated.nodes],
+            edges: replaceCurrent ? generated.edges : [...previous.edges, ...generated.edges],
+            updatedAt: new Date().toISOString(),
+          }),
+          { recordHistory: true }
+        )
+
+        clearCatalogDragState()
+        setSelectedNodeId(null)
+        setSelectedEdgeId(null)
+      } finally {
+        setIsBuildingBlueprint(false)
+      }
+    },
+    [clearCatalogDragState, flowInstance, selectedBlueprintId, updateDocument]
+  )
+
+  const buildNewWorkforceMap = useCallback(() => {
+    if (
+      document.nodes.length > 0 &&
+      !window.confirm('Replace current map with this workforce structure?')
+    ) {
+      return
+    }
+    applyWorkforceBlueprint(true)
+  }, [applyWorkforceBlueprint, document.nodes.length])
+
+  const appendWorkforcePack = useCallback(() => {
+    applyWorkforceBlueprint(false)
+  }, [applyWorkforceBlueprint])
 
   const runValidation = useCallback(async () => {
     setIsValidating(true)
@@ -442,11 +504,6 @@ export function MindMapBuilder() {
     flowInstance?.fitView({ padding: 0.25, duration: 300 })
   }, [flowInstance])
 
-  const clearCatalogDragState = useCallback(() => {
-    setIsCatalogDragging(false)
-    setDragTemplateId(null)
-  }, [])
-
   return (
     <main className="mx-auto flex w-full max-w-[1700px] flex-col gap-3 px-3 py-3 sm:px-4 sm:py-4">
       <header className="mind-surface-panel flex flex-wrap items-center justify-between gap-3 rounded-xl px-4 py-3">
@@ -458,6 +515,33 @@ export function MindMapBuilder() {
         </div>
 
         <div className="flex items-center gap-2">
+          <select
+            value={selectedBlueprintId}
+            onChange={(event) => setSelectedBlueprintId(event.target.value)}
+            className="mind-input-field h-9 rounded-md px-2 text-sm outline-none"
+          >
+            {blueprintOptions.map((option) => (
+              <option key={option.id} value={option.id}>
+                {option.title}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={buildNewWorkforceMap}
+            disabled={isBuildingBlueprint}
+            className="mind-tool-button inline-flex h-9 items-center gap-1 rounded-md px-3 text-sm disabled:opacity-60"
+          >
+            Build Workforce
+          </button>
+          <button
+            type="button"
+            onClick={appendWorkforcePack}
+            disabled={isBuildingBlueprint}
+            className="mind-tool-button inline-flex h-9 items-center gap-1 rounded-md px-3 text-sm disabled:opacity-60"
+          >
+            Add Workforce Pack
+          </button>
           <input
             value={runInput}
             onChange={(event) => setRunInput(event.target.value)}
