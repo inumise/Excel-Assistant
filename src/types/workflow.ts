@@ -1,4 +1,4 @@
-export type NodeRole = 'manager' | 'programmer' | 'code'
+export type NodeRole = 'manager' | 'programmer' | 'code' | 'text'
 
 export type EdgeDataType = 'api' | 'code' | 'ai'
 
@@ -33,11 +33,28 @@ export interface CodeSnippet {
   content: string
 }
 
+export interface WorkflowTextStyle {
+  fontFamily?: string
+  fontSize?: number
+  fontWeight?: '400' | '500' | '600' | '700' | '800'
+  italic?: boolean
+  underline?: boolean
+  uppercase?: boolean
+  align?: 'left' | 'center' | 'right'
+  color?: string
+  backgroundColor?: string
+  letterSpacing?: number
+  lineHeight?: number
+  shadow?: boolean
+}
+
 export interface WorkflowNodeData {
   label: string
   role: NodeRole
   workerType?: string
   prompt: string
+  textContent?: string
+  textStyle?: WorkflowTextStyle
   capabilities?: string[]
   codeSnippet?: CodeSnippet
   testsPassed?: boolean

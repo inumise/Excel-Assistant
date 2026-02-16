@@ -96,11 +96,17 @@ function hasUsableCode(node: WorkflowNode) {
   return Boolean(node.data.codeSnippet?.content?.trim())
 }
 
+function hasUsableText(node: WorkflowNode) {
+  if (node.data.role !== 'text') return true
+  return Boolean(node.data.textContent?.trim() || node.data.label?.trim())
+}
+
 export function validateWorkflow(workflow: Workflow): WorkflowValidationReport {
   const issues: WorkflowValidationIssue[] = []
   const nodeIds = new Set(workflow.nodes.map((node) => node.id))
   const edgeIdSeen = new Set<string>()
   const managerCount = workflow.nodes.filter((node) => node.data.role === 'manager').length
+  const executableNodeCount = workflow.nodes.filter((node) => node.data.role !== 'text').length
 
   if (workflow.nodes.length === 0) {
     addIssue(issues, {
@@ -118,7 +124,7 @@ export function validateWorkflow(workflow: Workflow): WorkflowValidationReport {
     })
   }
 
-  if (managerCount === 0 && workflow.nodes.length > 0) {
+  if (managerCount === 0 && executableNodeCount > 0) {
     addIssue(issues, {
       code: 'workflow.manager.missing',
       severity: 'warning',
@@ -144,6 +150,16 @@ export function validateWorkflow(workflow: Workflow): WorkflowValidationReport {
         severity: 'warning',
         nodeId: node.id,
         message: 'Worker prompt is empty.',
+        fixable: true,
+      })
+    }
+
+    if (!hasUsableText(node)) {
+      addIssue(issues, {
+        code: 'node.text.missing',
+        severity: 'warning',
+        nodeId: node.id,
+        message: 'Text node has no content.',
         fixable: true,
       })
     }
@@ -251,6 +267,9 @@ function createDefaultPrompt(role: WorkflowNodeData['role']) {
   if (role === 'programmer') {
     return 'Generate implementation steps and return concise output updates.'
   }
+  if (role === 'text') {
+    return ''
+  }
   return 'Execute function logic and return deterministic results.'
 }
 
@@ -269,7 +288,7 @@ function normalizeNode(node: WorkflowNode, index: number) {
     fixes.push(`role:${next.id}`)
   }
 
-  if (!next.data.prompt?.trim() && next.data.role !== 'code') {
+  if (!next.data.prompt?.trim() && next.data.role !== 'code' && next.data.role !== 'text') {
     next.data.prompt = createDefaultPrompt(next.data.role)
     fixes.push(`prompt:${next.id}`)
   }
@@ -287,6 +306,25 @@ function normalizeNode(node: WorkflowNode, index: number) {
       content: DEFAULT_CODE_SNIPPET,
     }
     fixes.push(`code:${next.id}`)
+  }
+
+  if (next.data.role === 'text' && !next.data.textContent?.trim()) {
+    next.data.textContent = next.data.label || 'Text note'
+    next.data.textStyle = {
+      fontFamily: next.data.textStyle?.fontFamily || 'Inter',
+      fontSize: next.data.textStyle?.fontSize || 18,
+      fontWeight: next.data.textStyle?.fontWeight || '600',
+      color: next.data.textStyle?.color || '#0F172A',
+      backgroundColor: next.data.textStyle?.backgroundColor || 'transparent',
+      align: next.data.textStyle?.align || 'left',
+      italic: Boolean(next.data.textStyle?.italic),
+      underline: Boolean(next.data.textStyle?.underline),
+      uppercase: Boolean(next.data.textStyle?.uppercase),
+      letterSpacing: next.data.textStyle?.letterSpacing || 0,
+      lineHeight: next.data.textStyle?.lineHeight || 1.3,
+      shadow: Boolean(next.data.textStyle?.shadow),
+    }
+    fixes.push(`text:${next.id}`)
   }
 
   return { node: next, fixes }
@@ -343,7 +381,8 @@ export function autoRepairWorkflow(workflow: Workflow) {
   appliedFixes.push(...normalizedEdges.fixes)
 
   const hasManager = draft.nodes.some((node) => node.data.role === 'manager')
-  if (!hasManager && draft.nodes.length > 0) {
+  const hasExecutable = draft.nodes.some((node) => node.data.role !== 'text')
+  if (!hasManager && hasExecutable && draft.nodes.length > 0) {
     draft.nodes[0] = {
       ...draft.nodes[0],
       type: 'manager',

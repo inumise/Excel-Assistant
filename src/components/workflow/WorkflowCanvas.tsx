@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
   type DragEvent,
+  type MouseEvent as ReactMouseEvent,
 } from 'react'
 import ReactFlow, {
   addEdge,
@@ -37,6 +38,7 @@ import {
   Calculator,
   Code2,
   Database,
+  Eraser,
   FileSpreadsheet,
   Handshake,
   Headset,
@@ -44,8 +46,10 @@ import {
   Loader2,
   MessageSquare,
   Megaphone,
+  MousePointer2,
   Palette,
   PanelsTopLeft,
+  Pencil,
   PlusCircle,
   Settings2,
   Save,
@@ -58,6 +62,7 @@ import {
   Target,
   TestTube2,
   UserRoundPlus,
+  Type,
   Workflow as WorkflowIcon,
   ZoomIn,
   ZoomOut,
@@ -80,6 +85,7 @@ import {
   WorkflowCommunicationEvent,
   WorkflowEdge,
   WorkflowNodeData,
+  WorkflowTextStyle,
 } from '@/types/workflow'
 
 interface FlowNodeData extends WorkflowNodeData {
@@ -156,10 +162,50 @@ interface SettingsResponse {
   settings?: UserAISettings
 }
 
+type CanvasTool = 'select' | 'text' | 'pencil' | 'eraser'
+
+interface DrawingPoint {
+  x: number
+  y: number
+}
+
+interface DrawingStroke {
+  id: string
+  color: string
+  width: number
+  points: DrawingPoint[]
+}
+
 const edgePalette: Record<EdgeDataType, string> = {
   api: '#2563EB',
   code: '#059669',
   ai: '#7C3AED',
+}
+
+const textFontOptions = [
+  'Inter',
+  'Arial',
+  'Helvetica',
+  'Times New Roman',
+  'Georgia',
+  'Verdana',
+  'Trebuchet MS',
+  'Courier New',
+]
+
+const defaultTextStyle: WorkflowTextStyle = {
+  fontFamily: 'Inter',
+  fontSize: 20,
+  fontWeight: '600',
+  italic: false,
+  underline: false,
+  uppercase: false,
+  align: 'left',
+  color: '#0F172A',
+  backgroundColor: 'transparent',
+  letterSpacing: 0,
+  lineHeight: 1.3,
+  shadow: false,
 }
 
 const inHandleClass = '!bg-[#0F172A] !h-3 !w-3 !border-2 !border-white'
@@ -359,6 +405,18 @@ const libraryItems: LibraryItem[] = [
     defaultCapabilities: ['web actions', 'playwright', 'rpa'],
   },
   {
+    id: 'text-label',
+    label: 'Text Label',
+    category: 'tool',
+    description: 'Styled text block for notes, headings, and design annotations.',
+    icon: Type,
+    accent: '#0F172A',
+    role: 'text',
+    edgeType: 'ai',
+    defaultPrompt: '',
+    defaultCapabilities: ['annotation', 'heading', 'notes'],
+  },
+  {
     id: 'universal-function',
     label: 'Universal Function Node',
     category: 'function',
@@ -494,10 +552,40 @@ function CodeNode({ id, data, selected }: NodeProps<FlowNodeData>) {
   )
 }
 
+function TextNode({ data, selected }: NodeProps<FlowNodeData>) {
+  const style = { ...defaultTextStyle, ...(data.textStyle || {}) }
+  return (
+    <NodeShell title={data.label || 'Text'} subtitle={data.workerType || 'Text Label'} selected={selected}>
+      <Handle type="target" position={Position.Left} className={inHandleClass} />
+      <div
+        className="min-w-[220px] rounded-lg border border-[#E2E8F0] bg-white/95 px-3 py-2"
+        style={{
+          fontFamily: style.fontFamily,
+          fontSize: style.fontSize,
+          fontWeight: style.fontWeight,
+          fontStyle: style.italic ? 'italic' : 'normal',
+          textDecoration: style.underline ? 'underline' : 'none',
+          textTransform: style.uppercase ? 'uppercase' : 'none',
+          textAlign: style.align,
+          color: style.color,
+          backgroundColor: style.backgroundColor,
+          letterSpacing: `${style.letterSpacing || 0}px`,
+          lineHeight: style.lineHeight,
+          textShadow: style.shadow ? '0 1px 3px rgba(15,23,42,0.28)' : 'none',
+        }}
+      >
+        {data.textContent?.trim() || 'Text label'}
+      </div>
+      <Handle type="source" position={Position.Right} className={outHandleClass} />
+    </NodeShell>
+  )
+}
+
 const nodeTypes = {
   manager: ManagerNode,
   programmer: ProgrammerNode,
   code: CodeNode,
+  text: TextNode,
 }
 
 function toSerializableWorkflow(params: {
@@ -522,6 +610,8 @@ function toSerializableWorkflow(params: {
         role: node.data.role,
         workerType: node.data.workerType,
         prompt: node.data.prompt,
+        textContent: node.data.textContent,
+        textStyle: node.data.textStyle,
         capabilities: node.data.capabilities,
         codeSnippet: node.data.codeSnippet,
         testsPassed: node.data.testsPassed,
@@ -572,6 +662,12 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
   const [customWorkerRole, setCustomWorkerRole] = useState<NodeRole>('programmer')
   const [customCapabilitiesText, setCustomCapabilitiesText] = useState('custom-task')
   const [runInput, setRunInput] = useState('run current board')
+  const [activeTool, setActiveTool] = useState<CanvasTool>('select')
+  const [drawColor, setDrawColor] = useState('#111827')
+  const [drawWidth, setDrawWidth] = useState(3)
+  const [drawStrokes, setDrawStrokes] = useState<DrawingStroke[]>([])
+  const [isDrawing, setIsDrawing] = useState(false)
+  const [activeStrokeId, setActiveStrokeId] = useState<string | null>(null)
   const [globalPromptDraft, setGlobalPromptDraft] = useState('')
   const [promptProfileTitle, setPromptProfileTitle] = useState('Owner Direction')
   const [ownerTodoText, setOwnerTodoText] = useState('')
@@ -654,6 +750,24 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
     },
     []
   )
+
+  const getRelativePoint = useCallback((clientX: number, clientY: number): DrawingPoint | null => {
+    const bounds = flowWrapperRef.current?.getBoundingClientRect()
+    if (!bounds) return null
+    return {
+      x: clientX - bounds.left,
+      y: clientY - bounds.top,
+    }
+  }, [])
+
+  const pointNearStroke = useCallback((point: DrawingPoint, stroke: DrawingStroke, threshold = 16) => {
+    const sq = threshold * threshold
+    return stroke.points.some((candidate) => {
+      const dx = candidate.x - point.x
+      const dy = candidate.y - point.y
+      return dx * dx + dy * dy <= sq
+    })
+  }, [])
 
   const clearSignalTimers = useCallback(() => {
     pulseTimersRef.current.forEach((timer) => clearTimeout(timer))
@@ -757,6 +871,7 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
       setActiveWorkflowId(workflow.id)
       setCollapsedNodeIds([])
       setSelectedNodeId(null)
+      setDrawStrokes([])
       setIsDirty(false)
       setLastSavedAt(workflow.updatedAt)
     },
@@ -942,7 +1057,7 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
     }
     setNodes((prev) =>
       prev.map((node) => {
-        if (node.data.role === 'code') return node
+        if (node.data.role === 'code' || node.data.role === 'text') return node
         const existing = node.data.prompt || ''
         const withoutHeader = existing.includes('\n---\n')
           ? existing.split('\n---\n').slice(1).join('\n---\n')
@@ -1089,13 +1204,59 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
     const asyncRecord = memoryRecords.find(
       (record) => record.namespace === 'owner' && record.key === 'async_manager_notes'
     )
+    const drawingRecord = memoryRecords.find(
+      (record) => record.namespace === 'canvas' && record.key === 'drawing_layer'
+    )
     if (todoRecord && typeof todoRecord.value === 'string') {
       setOwnerTodoText(todoRecord.value)
     }
     if (asyncRecord && typeof asyncRecord.value === 'string') {
       setOwnerAsyncNote(asyncRecord.value)
     }
+    if (drawingRecord && Array.isArray(drawingRecord.value)) {
+      const safe = drawingRecord.value
+        .map((entry) => {
+          if (typeof entry !== 'object' || !entry) return null
+          const candidate = entry as Partial<DrawingStroke>
+          if (!candidate.id || !Array.isArray(candidate.points)) return null
+          return {
+            id: String(candidate.id),
+            color: String(candidate.color || '#111827'),
+            width: Number(candidate.width || 3),
+            points: candidate.points
+              .map((point) =>
+                typeof point === 'object' && point
+                  ? {
+                      x: Number((point as DrawingPoint).x || 0),
+                      y: Number((point as DrawingPoint).y || 0),
+                    }
+                  : null
+              )
+              .filter(Boolean) as DrawingPoint[],
+          } satisfies DrawingStroke
+        })
+        .filter(Boolean) as DrawingStroke[]
+      setDrawStrokes(safe.slice(0, 500))
+    }
   }, [memoryRecords])
+
+  useEffect(() => {
+    if (!activeWorkflowId) return
+    const timer = setTimeout(() => {
+      void fetch('/api/memory', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId,
+          workflowId: activeWorkflowId,
+          namespace: 'canvas',
+          key: 'drawing_layer',
+          value: drawStrokes.slice(0, 500),
+        }),
+      })
+    }, 1200)
+    return () => clearTimeout(timer)
+  }, [activeWorkflowId, drawStrokes, userId])
 
   useEffect(() => {
     if (!activeWorkflowId) return
@@ -1171,6 +1332,8 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
         workerType: item.label,
         role: item.role,
         prompt: item.defaultPrompt,
+        textContent: item.role === 'text' ? 'New text label' : undefined,
+        textStyle: item.role === 'text' ? { ...defaultTextStyle } : undefined,
         capabilities: [...item.defaultCapabilities],
         codeSnippet:
           item.role === 'code'
@@ -1299,6 +1462,19 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
     ]
   )
 
+  const addTextNodeAt = useCallback(
+    (position: { x: number; y: number }) => {
+      const template = libraryItems.find((item) => item.id === 'text-label')
+      if (!template) return
+      addFromLibrary({
+        mode: 'drop',
+        item: template,
+        position,
+      })
+    },
+    [addFromLibrary]
+  )
+
   const handleNodesChange = useCallback(
     (changes: NodeChange[]) => {
       onNodesChange(changes)
@@ -1367,6 +1543,91 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
     },
     [addFromLibrary, flowInstance]
   )
+
+  const onPaneClick = useCallback(
+    (event: ReactMouseEvent<Element, MouseEvent>) => {
+      if (activeTool === 'text') {
+        const fallbackPosition = (() => {
+          const bounds = flowWrapperRef.current?.getBoundingClientRect()
+          if (!bounds) return { x: 0, y: 0 }
+          return { x: event.clientX - bounds.left, y: event.clientY - bounds.top }
+        })()
+        const position = flowInstance
+          ? flowInstance.screenToFlowPosition({ x: event.clientX, y: event.clientY })
+          : fallbackPosition
+        addTextNodeAt(position)
+        return
+      }
+      setSelectedNodeId(null)
+    },
+    [activeTool, addTextNodeAt, flowInstance]
+  )
+
+  const startDrawing = useCallback(
+    (event: ReactMouseEvent<HTMLDivElement>) => {
+      if (activeTool !== 'pencil') return
+      const point = getRelativePoint(event.clientX, event.clientY)
+      if (!point) return
+      event.preventDefault()
+      event.stopPropagation()
+      const strokeId = `stroke-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
+      const stroke: DrawingStroke = {
+        id: strokeId,
+        color: drawColor,
+        width: drawWidth,
+        points: [point],
+      }
+      setDrawStrokes((prev) => [...prev, stroke])
+      setActiveStrokeId(strokeId)
+      setIsDrawing(true)
+      setIsDirty(true)
+    },
+    [activeTool, drawColor, drawWidth, getRelativePoint]
+  )
+
+  const moveDrawing = useCallback(
+    (event: ReactMouseEvent<HTMLDivElement>) => {
+      const point = getRelativePoint(event.clientX, event.clientY)
+      if (!point) return
+
+      if (activeTool === 'eraser') {
+        event.preventDefault()
+        event.stopPropagation()
+        setDrawStrokes((prev) => prev.filter((stroke) => !pointNearStroke(point, stroke)))
+        return
+      }
+
+      if (activeTool !== 'pencil' || !isDrawing || !activeStrokeId) return
+      event.preventDefault()
+      event.stopPropagation()
+      setDrawStrokes((prev) =>
+        prev.map((stroke) =>
+          stroke.id === activeStrokeId
+            ? {
+                ...stroke,
+                points: [...stroke.points, point],
+              }
+            : stroke
+        )
+      )
+    },
+    [activeStrokeId, activeTool, getRelativePoint, isDrawing, pointNearStroke]
+  )
+
+  const stopDrawing = useCallback(() => {
+    setIsDrawing(false)
+    setActiveStrokeId(null)
+  }, [])
+
+  const undoLastStroke = useCallback(() => {
+    setDrawStrokes((prev) => prev.slice(0, -1))
+    setIsDirty(true)
+  }, [])
+
+  const clearAllStrokes = useCallback(() => {
+    setDrawStrokes([])
+    setIsDirty(true)
+  }, [])
 
   const toggleCollapseSelected = useCallback(() => {
     if (!selectedNodeId) return
@@ -1659,13 +1920,14 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
   const clearBoardToEmpty = useCallback(() => {
     setNodes([])
     setEdges([])
+    setDrawStrokes([])
     setSelectedNodeId(null)
     setCollapsedNodeIds([])
     setIsDirty(true)
     setRunOutput('Board cleared. Drag AI workers from the left to start.')
     setRunningThoughts(['Board reset completed.', 'Drag a worker card into the map to begin.'])
     pushToast('Board reset to empty schematic map.', 'success')
-  }, [pushToast, setEdges, setNodes])
+  }, [pushToast, setDrawStrokes, setEdges, setNodes])
 
   useEffect(() => {
     if (!autosaveEnabled || !isDirty || !activeWorkflow || isSaving) return
@@ -1898,6 +2160,72 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
                 <option value="api">API</option>
                 <option value="code">Code</option>
               </select>
+              <div className="mx-1 h-5 w-px bg-[#DBEAFE]" />
+              <span className="text-xs font-medium text-[#334155]">Tools</span>
+              <Button
+                size="sm"
+                className={`h-8 ${activeTool === 'select' ? 'bg-[#1D4ED8] text-white' : 'bg-white text-[#1E293B]'} hover:bg-[#1E40AF] hover:text-white`}
+                onClick={() => setActiveTool('select')}
+              >
+                <MousePointer2 className="mr-1 h-3.5 w-3.5" />
+                Select
+              </Button>
+              <Button
+                size="sm"
+                className={`h-8 ${activeTool === 'text' ? 'bg-[#7C3AED] text-white' : 'bg-white text-[#1E293B]'} hover:bg-[#6D28D9] hover:text-white`}
+                onClick={() => setActiveTool('text')}
+              >
+                <Type className="mr-1 h-3.5 w-3.5" />
+                Text
+              </Button>
+              <Button
+                size="sm"
+                className={`h-8 ${activeTool === 'pencil' ? 'bg-[#0F766E] text-white' : 'bg-white text-[#1E293B]'} hover:bg-[#115E59] hover:text-white`}
+                onClick={() => setActiveTool('pencil')}
+              >
+                <Pencil className="mr-1 h-3.5 w-3.5" />
+                Pencil
+              </Button>
+              <Button
+                size="sm"
+                className={`h-8 ${activeTool === 'eraser' ? 'bg-[#B91C1C] text-white' : 'bg-white text-[#1E293B]'} hover:bg-[#991B1B] hover:text-white`}
+                onClick={() => setActiveTool('eraser')}
+              >
+                <Eraser className="mr-1 h-3.5 w-3.5" />
+                Eraser
+              </Button>
+              <input
+                type="color"
+                value={drawColor}
+                onChange={(event) => setDrawColor(event.target.value)}
+                className="h-8 w-9 rounded border border-[#CBD5E1] bg-white p-1"
+                title="Pencil color"
+              />
+              <input
+                type="number"
+                min={1}
+                max={24}
+                value={drawWidth}
+                onChange={(event) => setDrawWidth(Number(event.target.value))}
+                className="h-8 w-16 rounded border border-[#CBD5E1] bg-white px-2 text-xs text-[#0F172A]"
+                title="Pencil width"
+              />
+              <Button
+                size="sm"
+                className="h-8 bg-white text-[#1E293B] hover:bg-[#F8FAFC]"
+                onClick={undoLastStroke}
+                disabled={drawStrokes.length === 0}
+              >
+                Undo Ink
+              </Button>
+              <Button
+                size="sm"
+                className="h-8 bg-white text-[#1E293B] hover:bg-[#F8FAFC]"
+                onClick={clearAllStrokes}
+                disabled={drawStrokes.length === 0}
+              >
+                Clear Ink
+              </Button>
               <Button size="sm" className="h-8 bg-[#2563EB] text-white hover:bg-[#1D4ED8]" onClick={fitView}>
                 <Target className="mr-1 h-3.5 w-3.5" />
                 Fit
@@ -2043,6 +2371,7 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
                         <option value="manager">Manager</option>
                         <option value="programmer">Programmer</option>
                         <option value="code">Code</option>
+                        <option value="text">Text</option>
                       </select>
                       <Input
                         value={customCapabilitiesText}
@@ -2131,10 +2460,13 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
                 onEdgesChange={handleEdgesChange}
                 onConnect={onConnect}
                 onNodeClick={(_, node) => setSelectedNodeId(node.id)}
-                onPaneClick={() => setSelectedNodeId(null)}
+                onPaneClick={onPaneClick}
                 onInit={setFlowInstance}
-                panOnScroll
-                selectionOnDrag
+                panOnScroll={activeTool === 'select' || activeTool === 'text'}
+                selectionOnDrag={activeTool === 'select'}
+                elementsSelectable={activeTool === 'select' || activeTool === 'text'}
+                nodesDraggable={activeTool === 'select' || activeTool === 'text'}
+                nodesConnectable={activeTool === 'select' || activeTool === 'text'}
                 snapToGrid
                 snapGrid={[20, 20]}
                 defaultEdgeOptions={{ type: 'smoothstep' }}
@@ -2149,14 +2481,47 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
                   nodeColor={(node) => {
                     if (node.type === 'manager') return '#F59E0B'
                     if (node.type === 'programmer') return '#7C3AED'
+                    if (node.type === 'text') return '#0F172A'
                     return '#2563EB'
                   }}
                 />
                 <Controls />
               </ReactFlow>
 
+              <div
+                className={`absolute inset-0 z-10 ${
+                  activeTool === 'pencil' || activeTool === 'eraser' ? 'pointer-events-auto' : 'pointer-events-none'
+                }`}
+                onMouseDown={startDrawing}
+                onMouseMove={moveDrawing}
+                onMouseUp={stopDrawing}
+                onMouseLeave={stopDrawing}
+                style={{
+                  cursor:
+                    activeTool === 'pencil'
+                      ? 'crosshair'
+                      : activeTool === 'eraser'
+                      ? 'cell'
+                      : 'default',
+                }}
+              >
+                <svg className="h-full w-full">
+                  {drawStrokes.map((stroke) => (
+                    <polyline
+                      key={stroke.id}
+                      points={stroke.points.map((point) => `${point.x},${point.y}`).join(' ')}
+                      fill="none"
+                      stroke={stroke.color}
+                      strokeWidth={stroke.width}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  ))}
+                </svg>
+              </div>
+
               <div className="pointer-events-none absolute left-4 top-4 rounded-lg border border-[#BFDBFE] bg-white/90 px-3 py-2 text-[11px] text-[#1E3A8A] shadow">
-                Drag workers from left. Black dot = input, red dot = output. Connect to pass prompts/tasks between teams.
+                Drag workers from left. Black dot = input, red dot = output. Use Text tool to place labels and Pencil tool to draw freely.
               </div>
 
               <div className="pointer-events-none absolute bottom-4 left-4 rounded-lg border border-[#FDBA74] bg-[#FFF7ED]/90 px-3 py-2 text-[11px] text-[#9A3412] shadow">
@@ -2166,6 +2531,7 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
                     ? `${activeSignalCount} live communication pulse(s)`
                     : 'Signal lane waiting for next run'}
                 </span>
+                <div className="mt-1 text-[10px] text-[#7C2D12]">Active tool: {activeTool}</div>
               </div>
 
               {nodes.length === 0 && (
@@ -2420,12 +2786,25 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
                                     data: {
                                       ...node.data,
                                       role: nextRole,
+                                      textContent:
+                                        nextRole === 'text'
+                                          ? node.data.textContent || node.data.label || 'Text label'
+                                          : node.data.textContent,
+                                      textStyle:
+                                        nextRole === 'text'
+                                          ? {
+                                              ...defaultTextStyle,
+                                              ...(node.data.textStyle || {}),
+                                            }
+                                          : node.data.textStyle,
                                       codeSnippet:
                                         nextRole === 'code'
                                           ? node.data.codeSnippet || {
                                               language: 'typescript',
                                               content: 'export const runTask = () => "custom function output";\n',
                                             }
+                                          : nextRole === 'text'
+                                          ? undefined
                                           : node.data.codeSnippet,
                                     },
                                   }
@@ -2438,6 +2817,7 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
                         <option value="manager">Manager</option>
                         <option value="programmer">Programmer</option>
                         <option value="code">Code</option>
+                        <option value="text">Text</option>
                       </select>
 
                       <label className="text-[11px] text-[#334155]">Capabilities (comma)</label>
@@ -2449,13 +2829,166 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
                         className="h-8 border-[#CBD5E1] bg-white text-xs text-[#0F172A]"
                       />
 
-                      <label className="text-[11px] text-[#334155]">Mission prompt</label>
-                      <textarea
-                        value={selectedNode.data.prompt}
-                        onChange={(event) => patchNode(selectedNode.id, { prompt: event.target.value })}
-                        rows={3}
-                        className="w-full rounded-lg border border-[#CBD5E1] bg-white px-2 py-1 text-xs text-[#0F172A] outline-none"
-                      />
+                      {selectedNode.data.role !== 'text' && (
+                        <>
+                          <label className="text-[11px] text-[#334155]">Mission prompt</label>
+                          <textarea
+                            value={selectedNode.data.prompt}
+                            onChange={(event) => patchNode(selectedNode.id, { prompt: event.target.value })}
+                            rows={3}
+                            className="w-full rounded-lg border border-[#CBD5E1] bg-white px-2 py-1 text-xs text-[#0F172A] outline-none"
+                          />
+                        </>
+                      )}
+
+                      {selectedNode.data.role === 'text' && (
+                        <>
+                          <label className="text-[11px] text-[#334155]">Text content</label>
+                          <textarea
+                            value={selectedNode.data.textContent || ''}
+                            onChange={(event) => patchNode(selectedNode.id, { textContent: event.target.value })}
+                            rows={4}
+                            className="w-full rounded-lg border border-[#CBD5E1] bg-white px-2 py-1 text-xs text-[#0F172A] outline-none"
+                          />
+
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="text-[11px] text-[#334155]">Font</label>
+                              <select
+                                value={selectedNode.data.textStyle?.fontFamily || defaultTextStyle.fontFamily}
+                                onChange={(event) =>
+                                  patchNode(selectedNode.id, {
+                                    textStyle: {
+                                      ...defaultTextStyle,
+                                      ...(selectedNode.data.textStyle || {}),
+                                      fontFamily: event.target.value,
+                                    },
+                                  })
+                                }
+                                className="h-8 w-full rounded border border-[#CBD5E1] bg-white px-2 text-[11px] text-[#334155]"
+                              >
+                                {textFontOptions.map((font) => (
+                                  <option key={font} value={font}>
+                                    {font}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                            <div>
+                              <label className="text-[11px] text-[#334155]">Size</label>
+                              <input
+                                type="number"
+                                min={10}
+                                max={120}
+                                value={selectedNode.data.textStyle?.fontSize || defaultTextStyle.fontSize}
+                                onChange={(event) =>
+                                  patchNode(selectedNode.id, {
+                                    textStyle: {
+                                      ...defaultTextStyle,
+                                      ...(selectedNode.data.textStyle || {}),
+                                      fontSize: Number(event.target.value),
+                                    },
+                                  })
+                                }
+                                className="h-8 w-full rounded border border-[#CBD5E1] bg-white px-2 text-[11px] text-[#334155]"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="text-[11px] text-[#334155]">Text color</label>
+                              <input
+                                type="color"
+                                value={selectedNode.data.textStyle?.color || '#0F172A'}
+                                onChange={(event) =>
+                                  patchNode(selectedNode.id, {
+                                    textStyle: {
+                                      ...defaultTextStyle,
+                                      ...(selectedNode.data.textStyle || {}),
+                                      color: event.target.value,
+                                    },
+                                  })
+                                }
+                                className="h-8 w-full rounded border border-[#CBD5E1] bg-white px-1"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[11px] text-[#334155]">Background</label>
+                              <input
+                                type="color"
+                                value={
+                                  selectedNode.data.textStyle?.backgroundColor &&
+                                  selectedNode.data.textStyle.backgroundColor !== 'transparent'
+                                    ? selectedNode.data.textStyle.backgroundColor
+                                    : '#ffffff'
+                                }
+                                onChange={(event) =>
+                                  patchNode(selectedNode.id, {
+                                    textStyle: {
+                                      ...defaultTextStyle,
+                                      ...(selectedNode.data.textStyle || {}),
+                                      backgroundColor: event.target.value,
+                                    },
+                                  })
+                                }
+                                className="h-8 w-full rounded border border-[#CBD5E1] bg-white px-1"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-3 gap-2">
+                            <label className="flex items-center justify-between rounded border border-[#CBD5E1] bg-[#F8FAFC] px-2 py-1 text-[11px] text-[#334155]">
+                              Italic
+                              <input
+                                type="checkbox"
+                                checked={Boolean(selectedNode.data.textStyle?.italic)}
+                                onChange={(event) =>
+                                  patchNode(selectedNode.id, {
+                                    textStyle: {
+                                      ...defaultTextStyle,
+                                      ...(selectedNode.data.textStyle || {}),
+                                      italic: event.target.checked,
+                                    },
+                                  })
+                                }
+                              />
+                            </label>
+                            <label className="flex items-center justify-between rounded border border-[#CBD5E1] bg-[#F8FAFC] px-2 py-1 text-[11px] text-[#334155]">
+                              Underline
+                              <input
+                                type="checkbox"
+                                checked={Boolean(selectedNode.data.textStyle?.underline)}
+                                onChange={(event) =>
+                                  patchNode(selectedNode.id, {
+                                    textStyle: {
+                                      ...defaultTextStyle,
+                                      ...(selectedNode.data.textStyle || {}),
+                                      underline: event.target.checked,
+                                    },
+                                  })
+                                }
+                              />
+                            </label>
+                            <label className="flex items-center justify-between rounded border border-[#CBD5E1] bg-[#F8FAFC] px-2 py-1 text-[11px] text-[#334155]">
+                              Shadow
+                              <input
+                                type="checkbox"
+                                checked={Boolean(selectedNode.data.textStyle?.shadow)}
+                                onChange={(event) =>
+                                  patchNode(selectedNode.id, {
+                                    textStyle: {
+                                      ...defaultTextStyle,
+                                      ...(selectedNode.data.textStyle || {}),
+                                      shadow: event.target.checked,
+                                    },
+                                  })
+                                }
+                              />
+                            </label>
+                          </div>
+                        </>
+                      )}
 
                       {selectedNode.data.role === 'code' && (
                         <>

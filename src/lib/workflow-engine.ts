@@ -153,6 +153,20 @@ Provide a short coding execution summary.`,
       continue
     }
 
+    if (node.data.role === 'text') {
+      const textSummary = node.data.textContent?.trim()
+        ? `Text annotation shared: ${node.data.textContent.slice(0, 120)}`
+        : `Text annotation: ${node.data.label}`
+      nodeResults.push({
+        nodeId: node.id,
+        role: node.data.role,
+        success: true,
+        summary: textSummary,
+      })
+      registerCommunications(node.id, textSummary)
+      continue
+    }
+
     const code = node.data.codeSnippet?.content || ''
     if (!code.trim()) {
       nodeResults.push({

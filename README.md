@@ -10,6 +10,9 @@ Palette: `#1A1A1A` / `#FFD700` / `#C9A483`
   - Owner-first top command bar + empty schematic map board
   - Left AI worker list for click/hold + drag-to-map on mobile/PC
   - Right owner control window with Prompt / Code / Todo / Output modes
+  - Graphic-app style map tools: Select, Text, Pencil, Eraser
+  - Freehand drawing layer (ink) with color/width, undo, and clear
+  - Text label nodes with font, size, color, background, and style controls
   - Futuristic clean-white style with deep RGB pulse/wave motion
   - Corporate role templates + universal custom role builder
   - Build any org/tool/function structure with drag-to-create blocks
