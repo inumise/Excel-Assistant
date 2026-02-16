@@ -4,6 +4,7 @@ import { memo } from 'react'
 import { Handle, NodeProps, Position } from 'reactflow'
 import { Brain, Database, MessageSquareText, Square, Waves } from 'lucide-react'
 import { MindMapNodeData } from '@/components/mindmap/types'
+import { NodeRuntimeStatus } from '@/types/workflow'
 
 function badgeClass(kind: MindMapNodeData['nodeKind']) {
   if (kind === 'ai') return 'bg-violet-100 text-violet-700'
@@ -19,6 +20,14 @@ function roleIcon(kind: MindMapNodeData['nodeKind']) {
   if (kind === 'storage') return <Database className="h-4 w-4" />
   if (kind === 'text') return <MessageSquareText className="h-4 w-4" />
   return <Square className="h-4 w-4" />
+}
+
+function runtimeBadge(status: NodeRuntimeStatus | undefined) {
+  if (!status || status === 'idle') return 'bg-slate-100 text-slate-600'
+  if (status === 'queued') return 'bg-amber-100 text-amber-700'
+  if (status === 'running') return 'bg-blue-100 text-blue-700'
+  if (status === 'success') return 'bg-emerald-100 text-emerald-700'
+  return 'bg-red-100 text-red-700'
 }
 
 export const MindMapNodeCard = memo(function MindMapNodeCard({
@@ -59,6 +68,9 @@ export const MindMapNodeCard = memo(function MindMapNodeCard({
         </span>
         {isAI && (
           <>
+            <span className={`rounded-full px-2 py-0.5 text-[10px] ${runtimeBadge(data.runtime?.status)}`}>
+              {data.runtime?.status || 'idle'}
+            </span>
             <span className="rounded-full bg-indigo-50 px-2 py-0.5 text-[10px] text-indigo-700">
               {data.aiConfig?.model || 'global model'}
             </span>

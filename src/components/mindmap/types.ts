@@ -4,12 +4,21 @@ import type {
   NodeAIConfig,
   NodeMemoryScope,
   NodeRoutingMode,
+  NodeRuntimeInfo,
   Workflow,
   WorkflowGlobalDefaults,
   WorkflowNodeData,
 } from '@/types/workflow'
 
-export type MindMapTool = 'select' | 'box' | 'ai-box' | 'text' | 'pencil' | 'eraser'
+export type MindMapTool =
+  | 'select'
+  | 'box'
+  | 'shape'
+  | 'ai-box'
+  | 'text'
+  | 'pencil'
+  | 'highlighter'
+  | 'eraser'
 
 export type MindMapNodeKind = 'box' | 'ai' | 'text' | 'buffer' | 'storage'
 
@@ -22,6 +31,7 @@ export interface FreehandStroke {
   id: string
   color: string
   width: number
+  opacity: number
   points: FreehandPoint[]
 }
 
@@ -32,7 +42,14 @@ export interface MindMapNodeData extends WorkflowNodeData {
 }
 
 export type MindMapNode = Node<MindMapNodeData>
-export type MindMapEdge = Edge
+export type MindMapMessageType = EdgeDataType
+
+export interface MindMapEdgeData {
+  messageType: MindMapMessageType
+  channel?: string
+}
+
+export type MindMapEdge = Edge<MindMapEdgeData>
 
 export interface MindMapDocument {
   nodes: MindMapNode[]
@@ -49,6 +66,16 @@ export interface NodeTemplateDefinition {
   kind: MindMapNodeKind
   role: WorkflowNodeData['role']
 }
+
+export const EDGE_MESSAGE_TYPES: MindMapMessageType[] = [
+  'prompt',
+  'context',
+  'code',
+  'event',
+  'memory',
+  'api',
+  'ai',
+]
 
 export const DEFAULT_GLOBALS: WorkflowGlobalDefaults = {
   systemPrompt: 'Think clearly, respond briefly, and keep context grounded in the map.',
@@ -73,6 +100,13 @@ export const NODE_TEMPLATES: NodeTemplateDefinition[] = [
     description: 'Configurable AI node with prompt/model/memory/routing',
     kind: 'ai',
     role: 'programmer',
+  },
+  {
+    id: 'shape',
+    title: 'Shape',
+    description: 'Basic shape card for diagram anchors',
+    kind: 'box',
+    role: 'text',
   },
   {
     id: 'text',
@@ -124,16 +158,8 @@ export function createMindMapNode(template: NodeTemplateDefinition, position: XY
     code: undefined,
   }
 
-  const labelBase =
-    template.kind === 'ai'
-      ? 'AI Box'
-      : template.kind === 'storage'
-      ? 'Storage'
-      : template.kind === 'buffer'
-      ? 'Buffer'
-      : template.kind === 'text'
-      ? 'Text'
-      : 'Box'
+  const labelBase = template.title
+  const runtime: NodeRuntimeInfo = { status: 'idle' }
 
   return {
     id,
@@ -148,6 +174,7 @@ export function createMindMapNode(template: NodeTemplateDefinition, position: XY
       prompt: '',
       textContent: template.kind === 'text' ? 'New label' : '',
       aiConfig,
+      runtime,
       storageConfig: template.kind === 'storage' ? { ...storageDefaultsByKind.storage } : undefined,
       bufferConfig:
         template.kind === 'buffer'
@@ -203,6 +230,10 @@ function inferNodeKind(data: Partial<MindMapNodeData>): MindMapNodeKind {
   return 'box'
 }
 
+function isEdgeMessageType(value: unknown): value is MindMapMessageType {
+  return typeof value === 'string' && EDGE_MESSAGE_TYPES.includes(value as MindMapMessageType)
+}
+
 export function normalizeMindMapDocument(input?: Partial<MindMapDocument>): MindMapDocument {
   const nodes = (input?.nodes || []).map((rawNode) => {
     const source = rawNode as MindMapNode
@@ -221,6 +252,7 @@ export function normalizeMindMapDocument(input?: Partial<MindMapDocument>): Mind
       nodeKind: kind,
       notes: source.data?.notes || '',
       aiConfig: source.data?.aiConfig || {},
+      runtime: source.data?.runtime || { status: 'idle' },
       errorHandler: source.data?.errorHandler || { retryCount: 1, notifyWhatsapp: false },
       errorCheckEnabled: source.data?.errorCheckEnabled ?? false,
       monitoring: source.data?.monitoring || 'none',
@@ -240,8 +272,31 @@ export function normalizeMindMapDocument(input?: Partial<MindMapDocument>): Mind
 
   return {
     nodes,
-    edges: (input?.edges || []).map((edge) => ({ ...(edge as MindMapEdge) })),
-    strokes: (input?.strokes || []).map((stroke) => ({ ...(stroke as FreehandStroke) })),
+    edges: (input?.edges || []).map((rawEdge) => {
+      const edge = rawEdge as MindMapEdge
+      const normalizedType = isEdgeMessageType(edge.data?.messageType)
+        ? edge.data.messageType
+        : isEdgeMessageType((edge.data as { dataType?: unknown } | undefined)?.dataType)
+        ? ((edge.data as { dataType: MindMapMessageType }).dataType as MindMapMessageType)
+        : 'prompt'
+      return {
+        ...edge,
+        data: {
+          messageType: normalizedType,
+          channel: edge.data?.channel || '',
+        },
+      } satisfies MindMapEdge
+    }),
+    strokes: (input?.strokes || []).map((rawStroke) => {
+      const stroke = rawStroke as Partial<FreehandStroke>
+      return {
+        id: stroke.id || `stroke-${crypto.randomUUID().slice(0, 8)}`,
+        color: stroke.color || '#2563EB',
+        width: typeof stroke.width === 'number' ? stroke.width : 2.5,
+        opacity: typeof stroke.opacity === 'number' ? stroke.opacity : 0.95,
+        points: stroke.points || [],
+      } satisfies FreehandStroke
+    }),
     globalDefaults: { ...DEFAULT_GLOBALS, ...(input?.globalDefaults || {}) },
     updatedAt: input?.updatedAt || new Date().toISOString(),
   }
@@ -274,7 +329,7 @@ export function buildWorkflowFromDocument(params: {
       sourceHandle: edge.sourceHandle || undefined,
       targetHandle: edge.targetHandle || undefined,
       label: typeof edge.label === 'string' ? edge.label : undefined,
-      dataType: (edge.data?.dataType as EdgeDataType) || 'ai',
+      dataType: edge.data?.messageType || 'prompt',
       animated: Boolean(edge.animated),
     })),
     createdAt: now,

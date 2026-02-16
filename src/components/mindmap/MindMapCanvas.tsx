@@ -27,6 +27,7 @@ import {
   NODE_TEMPLATES,
   createMindMapNode,
 } from '@/components/mindmap/types'
+import { CANVAS_NODE_TOOL_TO_TEMPLATE } from '@/components/mindmap/tool-registry'
 import { MindMapNodeCard } from '@/components/mindmap/MindMapNodeCard'
 
 interface MindMapCanvasProps {
@@ -35,6 +36,7 @@ interface MindMapCanvasProps {
   drawColor: string
   drawWidth: number
   onSelectNode: (nodeId: string | null) => void
+  onSelectEdge: (edgeId: string | null) => void
   onUpdateDocument: (
     updater: (previous: MindMapDocument) => MindMapDocument,
     options?: { recordHistory?: boolean }
@@ -56,6 +58,7 @@ function MindMapCanvasInner({
   drawColor,
   drawWidth,
   onSelectNode,
+  onSelectEdge,
   onUpdateDocument,
   onFlowReady,
 }: MindMapCanvasProps) {
@@ -110,8 +113,8 @@ function MindMapCanvasInner({
               ...connection,
               id: `edge-${crypto.randomUUID().slice(0, 8)}`,
               animated: false,
-              data: { dataType: 'ai' },
-              label: '',
+              data: { messageType: 'prompt', channel: 'default' },
+              label: 'prompt',
             },
             previous.edges
           ),
@@ -163,6 +166,7 @@ function MindMapCanvasInner({
     (event: MouseEvent) => {
       if (activeTool === 'select') {
         onSelectNode(null)
+        onSelectEdge(null)
         return
       }
       if (!wrapperRef.current) return
@@ -170,11 +174,10 @@ function MindMapCanvasInner({
         x: event.clientX,
         y: event.clientY,
       })
-      if (activeTool === 'box') addNodeAtPoint('box', position.x, position.y)
-      if (activeTool === 'ai-box') addNodeAtPoint('ai-box', position.x, position.y)
-      if (activeTool === 'text') addNodeAtPoint('text', position.x, position.y)
+      const templateId = CANVAS_NODE_TOOL_TO_TEMPLATE[activeTool]
+      if (templateId) addNodeAtPoint(templateId, position.x, position.y)
     },
-    [activeTool, addNodeAtPoint, onSelectNode, reactFlow]
+    [activeTool, addNodeAtPoint, onSelectEdge, onSelectNode, reactFlow]
   )
 
   const writeStrokePoint = useCallback(
@@ -200,15 +203,24 @@ function MindMapCanvasInner({
     [activeStrokeId, onUpdateDocument]
   )
 
-  const beginPencilStroke = useCallback(
-    (x: number, y: number) => {
+  const beginStroke = useCallback(
+    (x: number, y: number, mode: 'pencil' | 'highlighter') => {
       const strokeId = `stroke-${crypto.randomUUID().slice(0, 8)}`
       setActiveStrokeId(strokeId)
       // One history checkpoint per stroke start keeps undo/redo predictable.
       onUpdateDocument(
         (previous) => ({
           ...previous,
-          strokes: [...previous.strokes, { id: strokeId, color: drawColor, width: drawWidth, points: [{ x, y }] }],
+          strokes: [
+            ...previous.strokes,
+            {
+              id: strokeId,
+              color: drawColor,
+              width: mode === 'highlighter' ? Math.max(4, drawWidth * 2.2) : drawWidth,
+              opacity: mode === 'highlighter' ? 0.35 : 0.95,
+              points: [{ x, y }],
+            },
+          ],
           updatedAt: new Date().toISOString(),
         }),
         { recordHistory: true }
@@ -242,24 +254,24 @@ function MindMapCanvasInner({
 
   const onDrawPointerDown = useCallback(
     (event: PointerEvent) => {
-      if (activeTool !== 'pencil' && activeTool !== 'eraser') return
+      if (activeTool !== 'pencil' && activeTool !== 'highlighter' && activeTool !== 'eraser') return
       event.preventDefault()
       const point = toFlowPoint(event)
-      if (activeTool === 'pencil') {
-        beginPencilStroke(point.x, point.y)
+      if (activeTool === 'pencil' || activeTool === 'highlighter') {
+        beginStroke(point.x, point.y, activeTool)
         return
       }
       eraseAtPoint(point.x, point.y, true)
     },
-    [activeTool, beginPencilStroke, eraseAtPoint, toFlowPoint]
+    [activeTool, beginStroke, eraseAtPoint, toFlowPoint]
   )
 
   const onDrawPointerMove = useCallback(
     (event: PointerEvent) => {
-      if (activeTool !== 'pencil' && activeTool !== 'eraser') return
+      if (activeTool !== 'pencil' && activeTool !== 'highlighter' && activeTool !== 'eraser') return
       if (event.buttons === 0) return
       const point = toFlowPoint(event)
-      if (activeTool === 'pencil') {
+      if (activeTool === 'pencil' || activeTool === 'highlighter') {
         writeStrokePoint(point.x, point.y)
       } else {
         eraseAtPoint(point.x, point.y, false)
@@ -280,10 +292,10 @@ function MindMapCanvasInner({
           points={stroke.points.map((point) => `${point.x},${point.y}`).join(' ')}
           stroke={stroke.color}
           strokeWidth={stroke.width}
+          strokeOpacity={stroke.opacity}
           strokeLinecap="round"
           strokeLinejoin="round"
           fill="none"
-          opacity={0.95}
         />
       )),
     [document.strokes]
@@ -312,7 +324,9 @@ function MindMapCanvasInner({
           onPaneClick={onPaneClick}
           onSelectionChange={(selection) => {
             const firstNode = selection.nodes[0]
+            const firstEdge = selection.edges[0]
             onSelectNode(firstNode ? firstNode.id : null)
+            onSelectEdge(firstEdge ? firstEdge.id : null)
           }}
           fitView
           panOnDrag={activeTool === 'select'}

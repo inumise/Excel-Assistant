@@ -1,5 +1,6 @@
 import { generateAIText } from '@/lib/ai-manager'
 import { executeJavaScriptSandbox } from '@/lib/code-sandbox'
+import { getWorkflowExecutionOrder } from '@/lib/workflow-graph'
 import {
   EdgeDataType,
   UserAISettings,
@@ -25,6 +26,21 @@ export interface WorkflowExecutionResult {
   communications: WorkflowCommunicationEvent[]
 }
 
+export interface WorkflowExecutionAdapters {
+  generateText?: (params: {
+    settings: UserAISettings
+    prompt: string
+    temperature?: number
+    preferredModel?: string
+    extraSystemPrompt?: string
+  }) => Promise<string>
+  executeCode?: (params: {
+    node: WorkflowNode
+    language: 'javascript' | 'typescript' | 'python'
+    code: string
+  }) => Promise<{ ok: boolean; output?: string; error?: string }>
+}
+
 interface ChannelMessage {
   fromNodeId: string
   edgeId: string
@@ -33,55 +49,13 @@ interface ChannelMessage {
   createdAt: string
 }
 
-function getExecutionOrder(workflow: Workflow): WorkflowNode[] {
-  const inDegree = new Map<string, number>()
-  const adjacency = new Map<string, string[]>()
-  const nodeMap = new Map(workflow.nodes.map((node) => [node.id, node]))
-  const validNodeIds = new Set(workflow.nodes.map((node) => node.id))
-
-  workflow.nodes.forEach((node) => {
-    inDegree.set(node.id, 0)
-    adjacency.set(node.id, [])
-  })
-
-  workflow.edges.forEach((edge) => {
-    if (!validNodeIds.has(edge.source) || !validNodeIds.has(edge.target)) return
-    adjacency.get(edge.source)?.push(edge.target)
-    inDegree.set(edge.target, (inDegree.get(edge.target) || 0) + 1)
-  })
-
-  const queue = workflow.nodes
-    .filter((node) => (inDegree.get(node.id) || 0) === 0)
-    .sort((a, b) => a.position.x - b.position.x)
-  const ordered: WorkflowNode[] = []
-
-  while (queue.length > 0) {
-    const node = queue.shift()
-    if (!node) break
-
-    ordered.push(node)
-    adjacency.get(node.id)?.forEach((targetId) => {
-      inDegree.set(targetId, (inDegree.get(targetId) || 0) - 1)
-      if ((inDegree.get(targetId) || 0) === 0) {
-        const targetNode = nodeMap.get(targetId)
-        if (targetNode) queue.push(targetNode)
-      }
-    })
-  }
-
-  if (ordered.length !== workflow.nodes.length) {
-    return [...workflow.nodes].sort((a, b) => a.position.x - b.position.x)
-  }
-
-  return ordered
-}
-
 export async function executeWorkflow(params: {
   workflow: Workflow
   settings: UserAISettings
   triggerText: string
+  adapters?: WorkflowExecutionAdapters
 }) {
-  const orderedNodes = getExecutionOrder(params.workflow)
+  const orderedNodes = getWorkflowExecutionOrder(params.workflow)
   const nodeResults: NodeExecutionResult[] = []
   const communications: WorkflowCommunicationEvent[] = []
   const validNodeIds = new Set(params.workflow.nodes.map((node) => node.id))
@@ -115,6 +89,20 @@ export async function executeWorkflow(params: {
     }
   >()
 
+  const generateText: NonNullable<WorkflowExecutionAdapters['generateText']> =
+    params.adapters?.generateText ||
+    (async (input: {
+      settings: UserAISettings
+      prompt: string
+      temperature?: number
+      preferredModel?: string
+      extraSystemPrompt?: string
+    }) => generateAIText(input))
+
+  const runCode: NonNullable<WorkflowExecutionAdapters['executeCode']> =
+    params.adapters?.executeCode ||
+    (async (input: { code: string }) => executeJavaScriptSandbox(input.code))
+
   const appendInbox = (nodeId: string, messages: ChannelMessage[]) => {
     const existing = inboxByNode.get(nodeId) || []
     inboxByNode.set(nodeId, [...existing, ...messages].slice(-200))
@@ -147,10 +135,14 @@ export async function executeWorkflow(params: {
     const routing = resolveNodeRuntimeConfig(sourceNode).routing
     if (routing === 'direct') return outgoing
 
+    const preferredByType =
+      routing === 'buffered'
+        ? outgoing.filter((edge) => edge.dataType === 'context' || edge.dataType === 'event')
+        : outgoing.filter((edge) => edge.dataType === 'memory')
+    if (preferredByType.length > 0) return preferredByType
+
     const preferredRole = routing === 'buffered' ? 'buffer' : 'storage'
-    const preferredEdges = outgoing.filter(
-      (edge) => nodeById.get(edge.target)?.data.role === preferredRole
-    )
+    const preferredEdges = outgoing.filter((edge) => nodeById.get(edge.target)?.data.role === preferredRole)
     return preferredEdges.length > 0 ? preferredEdges : outgoing
   }
 
@@ -231,7 +223,7 @@ export async function executeWorkflow(params: {
     if (node.data.role === 'manager') {
       const runtimeConfig = resolveNodeRuntimeConfig(node)
       const childSummaries = nodeResults.map((result) => `${result.nodeId}: ${result.summary}`).join('\n')
-      const managerPlan = await generateAIText({
+      const managerPlan = await generateText({
         settings: params.settings,
         temperature: runtimeConfig.temperature,
         preferredModel: runtimeConfig.model,
@@ -263,7 +255,7 @@ Return concise orchestration status.`,
 
     if (node.data.role === 'programmer') {
       const runtimeConfig = resolveNodeRuntimeConfig(node)
-      const programmerSummary = await generateAIText({
+      const programmerSummary = await generateText({
         settings: params.settings,
         temperature: runtimeConfig.temperature,
         preferredModel: runtimeConfig.model,
@@ -457,6 +449,7 @@ Provide a short coding execution summary.`,
 
     const runtimeConfig = resolveNodeRuntimeConfig(node)
     const code = runtimeConfig.code || node.data.codeSnippet?.content || ''
+    const language = node.data.codeSnippet?.language || 'typescript'
     if (!code.trim()) {
       nodeResults.push({
         nodeId: node.id,
@@ -469,7 +462,7 @@ Provide a short coding execution summary.`,
       continue
     }
 
-    if (node.data.codeSnippet?.language === 'python') {
+    if (language === 'python' && !params.adapters?.executeCode) {
       nodeResults.push({
         nodeId: node.id,
         role: node.data.role,
@@ -481,13 +474,13 @@ Provide a short coding execution summary.`,
       continue
     }
 
-    let execution = executeJavaScriptSandbox(code)
+    let execution = await runCode({ node, language, code })
     let attempt = 0
     const retries = Math.max(0, node.data.errorHandler.retryCount || 0)
 
     while (!execution.ok && attempt < retries) {
       attempt += 1
-      execution = executeJavaScriptSandbox(code)
+      execution = await runCode({ node, language, code })
     }
 
     nodeResults.push({

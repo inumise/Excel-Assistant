@@ -1,6 +1,6 @@
 export type NodeRole = 'manager' | 'programmer' | 'code' | 'text' | 'buffer' | 'storage'
 
-export type EdgeDataType = 'api' | 'code' | 'ai'
+export type EdgeDataType = 'ai' | 'api' | 'code' | 'prompt' | 'context' | 'event' | 'memory'
 
 export type TonePreset =
   | 'luxury-brand'
@@ -46,6 +46,15 @@ export interface WorkflowTextStyle {
   letterSpacing?: number
   lineHeight?: number
   shadow?: boolean
+}
+
+export type NodeRuntimeStatus = 'idle' | 'queued' | 'running' | 'success' | 'error'
+
+export interface NodeRuntimeInfo {
+  status: NodeRuntimeStatus
+  lastRunAt?: string
+  lastSummary?: string
+  lastError?: string
 }
 
 export interface BufferNodeConfig {
@@ -96,6 +105,7 @@ export interface WorkflowNodeData {
   bufferConfig?: BufferNodeConfig
   storageConfig?: StorageNodeConfig
   aiConfig?: NodeAIConfig
+  runtime?: NodeRuntimeInfo
   capabilities?: string[]
   codeSnippet?: CodeSnippet
   testsPassed?: boolean

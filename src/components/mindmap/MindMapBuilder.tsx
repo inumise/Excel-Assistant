@@ -1,52 +1,40 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Play, RefreshCw, Save } from 'lucide-react'
+import { ReactFlowInstance } from 'reactflow'
 import { DEMO_USER_ID } from '@/lib/workflow-template'
+import { getWorkflowExecutionOrder } from '@/lib/workflow-graph'
+import { isAINode } from '@/lib/mindmap-runtime'
 import { MindMapCanvas } from '@/components/mindmap/MindMapCanvas'
+import { EdgeDetailsPanel } from '@/components/mindmap/EdgeDetailsPanel'
 import { GlobalPanel } from '@/components/mindmap/GlobalPanel'
 import { NodeDetailsPanel } from '@/components/mindmap/NodeDetailsPanel'
 import { Toolbox } from '@/components/mindmap/Toolbox'
 import { WorkerCatalog } from '@/components/mindmap/WorkerCatalog'
 import {
-  MindMapDocument,
   MindMapEdge,
   MindMapNode,
   MindMapTool,
   buildWorkflowFromDocument,
-  cloneMindMapDocument,
-  createEmptyMindMapDocument,
   createMindMapNode,
-  normalizeMindMapDocument,
   NODE_TEMPLATES,
 } from '@/components/mindmap/types'
-import { WorkflowGlobalDefaults } from '@/types/workflow'
-import { ReactFlowInstance } from 'reactflow'
-
-interface ValidationResponse {
-  safeToRun: boolean
-  summary: string
-  nodeIssues: Record<string, string[]>
-}
-
-interface RunResponse {
-  success: boolean
-  output: string
-  nodeResults: Array<{ nodeId: string; summary: string }>
-  memoryTable?: Array<{ namespace: string; key: string; value: unknown; updatedAt: string }>
-}
+import { useMindMapDocument } from '@/components/mindmap/hooks/useMindMapDocument'
+import { fetchReliability, runMindMap, validateMindMap } from '@/components/mindmap/services'
+import { NodeRuntimeInfo, WorkflowGlobalDefaults } from '@/types/workflow'
 
 const LOCAL_STORAGE_KEY = 'mind-map-builder-document-v3'
 
 export function MindMapBuilder() {
-  const [document, setDocument] = useState<MindMapDocument>(createEmptyMindMapDocument())
+  const { document, isHydrated, updateDocument, undo, redo, canUndo, canRedo } =
+    useMindMapDocument(LOCAL_STORAGE_KEY)
   const [activeTool, setActiveTool] = useState<MindMapTool>('select')
   const [drawColor, setDrawColor] = useState('#2563EB')
   const [drawWidth, setDrawWidth] = useState(2.5)
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
+  const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null)
   const [globalCollapsed, setGlobalCollapsed] = useState(true)
-  const [undoStack, setUndoStack] = useState<MindMapDocument[]>([])
-  const [redoStack, setRedoStack] = useState<MindMapDocument[]>([])
   const [runInput, setRunInput] = useState('run this map')
   const [runOutput, setRunOutput] = useState('')
   const [isRunning, setIsRunning] = useState(false)
@@ -61,78 +49,7 @@ export function MindMapBuilder() {
     Array<{ namespace: string; key: string; value: string; updatedAt: string }>
   >([])
   const [sessionId] = useState(() => crypto.randomUUID())
-  const [isHydrated, setIsHydrated] = useState(false)
   const [flowInstance, setFlowInstance] = useState<ReactFlowInstance<MindMapNode, MindMapEdge> | null>(null)
-
-  const documentRef = useRef(document)
-  useEffect(() => {
-    documentRef.current = document
-  }, [document])
-
-  useEffect(() => {
-    const raw = localStorage.getItem(LOCAL_STORAGE_KEY)
-    if (!raw) {
-      setDocument(createEmptyMindMapDocument())
-      setIsHydrated(true)
-      return
-    }
-    try {
-      const parsed = JSON.parse(raw) as Partial<MindMapDocument>
-      setDocument(normalizeMindMapDocument(parsed))
-    } catch {
-      setDocument(createEmptyMindMapDocument())
-    } finally {
-      setIsHydrated(true)
-    }
-  }, [])
-
-  useEffect(() => {
-    if (!isHydrated) return
-    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(document))
-  }, [document, isHydrated])
-
-  const updateDocument = useCallback(
-    (
-      updater: (previous: MindMapDocument) => MindMapDocument,
-      options?: {
-        recordHistory?: boolean
-      }
-    ) => {
-      setDocument((previous) => {
-        const next = updater(previous)
-        const shouldRecord = options?.recordHistory !== false
-        if (shouldRecord && JSON.stringify(previous) !== JSON.stringify(next)) {
-          setUndoStack((stack) => [...stack.slice(-80), cloneMindMapDocument(previous)])
-          setRedoStack([])
-        }
-        return next
-      })
-    },
-    []
-  )
-
-  const canUndo = undoStack.length > 0
-  const canRedo = redoStack.length > 0
-
-  const handleUndo = useCallback(() => {
-    setUndoStack((stack) => {
-      if (stack.length === 0) return stack
-      const previousSnapshot = stack[stack.length - 1]
-      setRedoStack((redo) => [...redo.slice(-80), cloneMindMapDocument(documentRef.current)])
-      setDocument(previousSnapshot)
-      return stack.slice(0, -1)
-    })
-  }, [])
-
-  const handleRedo = useCallback(() => {
-    setRedoStack((stack) => {
-      if (stack.length === 0) return stack
-      const nextSnapshot = stack[stack.length - 1]
-      setUndoStack((undo) => [...undo.slice(-80), cloneMindMapDocument(documentRef.current)])
-      setDocument(nextSnapshot)
-      return stack.slice(0, -1)
-    })
-  }, [])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -141,20 +58,34 @@ export function MindMapBuilder() {
       const key = event.key.toLowerCase()
       if (key === 'z' && !event.shiftKey) {
         event.preventDefault()
-        handleUndo()
+        undo()
       } else if ((key === 'z' && event.shiftKey) || key === 'y') {
         event.preventDefault()
-        handleRedo()
+        redo()
       }
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [handleRedo, handleUndo])
+  }, [redo, undo])
 
   const selectedNode = useMemo(
     () => document.nodes.find((node) => node.id === selectedNodeId) || null,
     [document.nodes, selectedNodeId]
   )
+  const selectedEdge = useMemo(
+    () => document.edges.find((edge) => edge.id === selectedEdgeId) || null,
+    [document.edges, selectedEdgeId]
+  )
+
+  const handleSelectNode = useCallback((nodeId: string | null) => {
+    setSelectedNodeId(nodeId)
+    if (nodeId) setSelectedEdgeId(null)
+  }, [])
+
+  const handleSelectEdge = useCallback((edgeId: string | null) => {
+    setSelectedEdgeId(edgeId)
+    if (edgeId) setSelectedNodeId(null)
+  }, [])
 
   const patchNode = useCallback(
     (nodeId: string, patch: Partial<MindMapNode['data']>) => {
@@ -220,6 +151,35 @@ export function MindMapBuilder() {
     [selectedNodeId, updateDocument]
   )
 
+  const patchEdge = useCallback(
+    (edgeId: string, patch: Partial<MindMapEdge>) => {
+      updateDocument(
+        (previous) => ({
+          ...previous,
+          edges: previous.edges.map((edge) => (edge.id === edgeId ? { ...edge, ...patch } : edge)),
+          updatedAt: new Date().toISOString(),
+        }),
+        { recordHistory: true }
+      )
+    },
+    [updateDocument]
+  )
+
+  const deleteEdge = useCallback(
+    (edgeId: string) => {
+      updateDocument(
+        (previous) => ({
+          ...previous,
+          edges: previous.edges.filter((edge) => edge.id !== edgeId),
+          updatedAt: new Date().toISOString(),
+        }),
+        { recordHistory: true }
+      )
+      if (selectedEdgeId === edgeId) setSelectedEdgeId(null)
+    },
+    [selectedEdgeId, updateDocument]
+  )
+
   const patchDefaults = useCallback(
     (patch: Partial<WorkflowGlobalDefaults>) => {
       updateDocument(
@@ -266,12 +226,7 @@ export function MindMapBuilder() {
         document,
         userId: DEMO_USER_ID,
       })
-      const response = await fetch('/api/mindmap/validate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ workflow }),
-      })
-      const payload = (await response.json()) as ValidationResponse
+      const payload = await validateMindMap(workflow)
       setValidationSummary(payload.summary)
       setNodeIssuesById(payload.nodeIssues || {})
     } catch (error) {
@@ -283,24 +238,70 @@ export function MindMapBuilder() {
     }
   }, [document])
 
+  const applyNodeRuntimePatch = useCallback(
+    (patchByNodeId: Record<string, Partial<NodeRuntimeInfo>>) => {
+      updateDocument(
+        (previous) => ({
+          ...previous,
+          nodes: previous.nodes.map((node) => {
+            const runtimePatch = patchByNodeId[node.id]
+            if (!runtimePatch) return node
+            return {
+              ...node,
+              data: {
+                ...node.data,
+                runtime: {
+                  status: 'idle',
+                  ...(node.data.runtime || {}),
+                  ...runtimePatch,
+                },
+              },
+            }
+          }),
+          updatedAt: new Date().toISOString(),
+        }),
+        { recordHistory: false }
+      )
+    },
+    [updateDocument]
+  )
+
   const runMap = useCallback(async () => {
     setIsRunning(true)
+    let runningTimer: number | undefined
     try {
       const workflow = buildWorkflowFromDocument({
         document,
         userId: DEMO_USER_ID,
       })
-      const response = await fetch('/api/mindmap/run', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          workflow,
-          triggerText: runInput,
-          userId: DEMO_USER_ID,
-          sessionId,
-        }),
+
+      const orderedNodeIds = getWorkflowExecutionOrder(workflow)
+        .filter((node) => isAINode(node))
+        .map((node) => node.id)
+      if (orderedNodeIds.length > 0) {
+        applyNodeRuntimePatch(
+          Object.fromEntries(orderedNodeIds.map((nodeId) => [nodeId, { status: 'queued' }]))
+        )
+        let cursor = 0
+        runningTimer = window.setInterval(() => {
+          if (cursor >= orderedNodeIds.length) return
+          const currentId = orderedNodeIds[cursor]
+          const previousId = cursor > 0 ? orderedNodeIds[cursor - 1] : null
+          const patch: Record<string, Partial<NodeRuntimeInfo>> = {
+            [currentId]: { status: 'running' },
+          }
+          if (previousId) patch[previousId] = { status: 'queued' }
+          applyNodeRuntimePatch(patch)
+          cursor += 1
+        }, 220)
+      }
+
+      const payload = await runMindMap({
+        workflow,
+        triggerText: runInput,
+        userId: DEMO_USER_ID,
+        sessionId,
       })
-      const payload = (await response.json()) as RunResponse
       setRunOutput(payload.output || '')
       const rows =
         payload.memoryTable?.map((row) => ({
@@ -316,20 +317,51 @@ export function MindMapBuilder() {
       if (!payload.success && !payload.output) {
         setRunOutput('Run failed with no output.')
       }
+
+      const now = new Date().toISOString()
+      const resultById = new Map(payload.nodeResults.map((entry) => [entry.nodeId, entry]))
+      const runtimePatch: Record<string, Partial<NodeRuntimeInfo>> = {}
+      workflow.nodes.filter((node) => isAINode(node)).forEach((node) => {
+        const result = resultById.get(node.id)
+        if (!result) {
+          runtimePatch[node.id] = { status: 'idle', lastRunAt: now }
+          return
+        }
+        runtimePatch[node.id] = {
+          status: result.success ? 'success' : 'error',
+          lastRunAt: now,
+          lastSummary: result.summary,
+          lastError: result.error,
+        }
+      })
+      applyNodeRuntimePatch(runtimePatch)
     } catch (error) {
+      const now = new Date().toISOString()
+      const errorMessage = error instanceof Error ? error.message : 'unknown error'
+      applyNodeRuntimePatch(
+        Object.fromEntries(
+          document.nodes
+            .filter((node) => node.data.nodeKind === 'ai')
+            .map((node) => [
+              node.id,
+              {
+                status: 'error',
+                lastRunAt: now,
+                lastError: errorMessage,
+              } satisfies Partial<NodeRuntimeInfo>,
+            ])
+        )
+      )
       setRunOutput(`Run failed: ${error instanceof Error ? error.message : 'unknown error'}`)
     } finally {
+      if (runningTimer) window.clearInterval(runningTimer)
       setIsRunning(false)
     }
-  }, [document, runInput, sessionId])
+  }, [applyNodeRuntimePatch, document, runInput, sessionId])
 
   const refreshReliability = useCallback(async () => {
     try {
-      const response = await fetch('/api/system/health')
-      const payload = (await response.json()) as {
-        status?: 'healthy' | 'degraded' | 'critical'
-        checks?: Array<{ id: string; label: string; status: 'ok' | 'warning' | 'error'; detail?: string }>
-      }
+      const payload = await fetchReliability()
       setReliabilityStatus(
         payload.status === 'critical' ? 'offline' : payload.status ? payload.status : 'degraded'
       )
@@ -353,11 +385,12 @@ export function MindMapBuilder() {
   }, [])
 
   useEffect(() => {
+    if (!isHydrated) return
     const timeout = window.setTimeout(() => {
       void runValidation()
     }, 350)
     return () => window.clearTimeout(timeout)
-  }, [document, runValidation])
+  }, [document, isHydrated, runValidation])
 
   useEffect(() => {
     void refreshReliability()
@@ -447,8 +480,8 @@ export function MindMapBuilder() {
           <Toolbox
             activeTool={activeTool}
             onSelectTool={setActiveTool}
-            onUndo={handleUndo}
-            onRedo={handleRedo}
+            onUndo={undo}
+            onRedo={redo}
             onFitView={fitView}
             canUndo={canUndo}
             canRedo={canRedo}
@@ -484,20 +517,29 @@ export function MindMapBuilder() {
           activeTool={activeTool}
           drawColor={drawColor}
           drawWidth={drawWidth}
-          onSelectNode={setSelectedNodeId}
+          onSelectNode={handleSelectNode}
+          onSelectEdge={handleSelectEdge}
           onUpdateDocument={updateDocument}
           onFlowReady={setFlowInstance}
         />
 
         <div className="grid grid-rows-[minmax(0,1fr)_auto_auto] gap-3">
-          <NodeDetailsPanel
-            selectedNode={selectedNode}
-            globalDefaults={document.globalDefaults}
-            issues={selectedNode ? nodeIssuesById[selectedNode.id] || [] : []}
-            onPatchNode={patchNode}
-            onPatchAIConfig={patchAIConfig}
-            onDeleteNode={deleteNode}
-          />
+          {selectedEdge && !selectedNode ? (
+            <EdgeDetailsPanel
+              selectedEdge={selectedEdge}
+              onPatchEdge={patchEdge}
+              onDeleteEdge={deleteEdge}
+            />
+          ) : (
+            <NodeDetailsPanel
+              selectedNode={selectedNode}
+              globalDefaults={document.globalDefaults}
+              issues={selectedNode ? nodeIssuesById[selectedNode.id] || [] : []}
+              onPatchNode={patchNode}
+              onPatchAIConfig={patchAIConfig}
+              onDeleteNode={deleteNode}
+            />
+          )}
 
           <GlobalPanel
             collapsed={globalCollapsed}

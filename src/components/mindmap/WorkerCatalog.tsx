@@ -1,6 +1,6 @@
 'use client'
 
-import { Brain, Database, MessageSquareText, Square, Waves } from 'lucide-react'
+import { Brain, Database, MessageSquareText, Shapes, Square, Waves } from 'lucide-react'
 import { NODE_TEMPLATES } from '@/components/mindmap/types'
 
 interface WorkerCatalogProps {
@@ -12,6 +12,7 @@ function templateIcon(templateId: string) {
   if (templateId === 'storage') return <Database className="h-4 w-4 text-emerald-600" />
   if (templateId === 'buffer') return <Waves className="h-4 w-4 text-amber-600" />
   if (templateId === 'text') return <MessageSquareText className="h-4 w-4 text-sky-600" />
+  if (templateId === 'shape') return <Shapes className="h-4 w-4 text-indigo-600" />
   return <Square className="h-4 w-4 text-slate-600" />
 }
 

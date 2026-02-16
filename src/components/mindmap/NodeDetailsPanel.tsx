@@ -2,7 +2,7 @@
 
 import { AlertTriangle, Cpu, Info, Trash2 } from 'lucide-react'
 import { MindMapNode, resolveNodeAIFallback } from '@/components/mindmap/types'
-import { NodeMemoryScope, NodeRoutingMode, WorkflowGlobalDefaults } from '@/types/workflow'
+import { NodeMemoryScope, NodeRoutingMode, NodeRuntimeStatus, WorkflowGlobalDefaults } from '@/types/workflow'
 
 interface NodeDetailsPanelProps {
   selectedNode: MindMapNode | null
@@ -44,6 +44,7 @@ export function NodeDetailsPanel({
   const data = selectedNode.data
   const aiEffective = resolveNodeAIFallback(data.aiConfig, globalDefaults)
   const isAI = data.nodeKind === 'ai'
+  const runtimeStatus: NodeRuntimeStatus = data.runtime?.status || 'idle'
 
   return (
     <aside className="h-full rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -227,6 +228,31 @@ export function NodeDetailsPanel({
                 className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 font-mono text-xs outline-none ring-blue-500 focus:ring-2"
               />
             </label>
+
+            <label className="block">
+              <span className="text-xs font-medium text-slate-700">Async Status</span>
+              <select
+                value={runtimeStatus}
+                onChange={(event) =>
+                  onPatchNode(selectedNode.id, {
+                    runtime: {
+                      ...(data.runtime || {}),
+                      status: event.target.value as NodeRuntimeStatus,
+                    },
+                  })
+                }
+                className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm outline-none ring-blue-500 focus:ring-2"
+              >
+                <option value="idle">idle</option>
+                <option value="queued">queued</option>
+                <option value="running">running</option>
+                <option value="success">success</option>
+                <option value="error">error</option>
+              </select>
+              <p className="mt-1 text-[11px] text-slate-500">
+                Node status is runtime-aware and independent from global defaults.
+              </p>
+            </label>
           </div>
         </div>
       )}
@@ -251,6 +277,11 @@ export function NodeDetailsPanel({
         <p className="mt-2 text-[11px] text-slate-500">
           Effective model: <span className="font-medium text-slate-700">{aiEffective.model || 'none'}</span>
         </p>
+        {selectedNode.data.runtime?.lastRunAt && (
+          <p className="mt-1 text-[11px] text-slate-500">
+            Last run: <span className="font-medium text-slate-700">{selectedNode.data.runtime.lastRunAt}</span>
+          </p>
+        )}
       </div>
     </aside>
   )

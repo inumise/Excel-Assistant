@@ -81,6 +81,12 @@ export function validateMindMapWorkflow(workflow: Workflow): MindMapValidationRe
 
       const outgoing = outgoingByNode.get(node.id) || []
       if (resolved.routing === 'buffered') {
+        const bufferedTypedEdges = outgoing.filter(
+          (edge) => edge.dataType === 'context' || edge.dataType === 'event'
+        )
+        if (outgoing.length > 0 && bufferedTypedEdges.length === 0) {
+          issues.push('Routing is buffered but no outgoing edge is typed as context/event.')
+        }
         const hasBufferTarget = outgoing.some((edge) => {
           const target = workflow.nodes.find((candidate) => candidate.id === edge.target)
           return target?.data.role === 'buffer'
@@ -91,6 +97,10 @@ export function validateMindMapWorkflow(workflow: Workflow): MindMapValidationRe
       }
 
       if (resolved.routing === 'storage') {
+        const memoryTypedEdges = outgoing.filter((edge) => edge.dataType === 'memory')
+        if (outgoing.length > 0 && memoryTypedEdges.length === 0) {
+          issues.push('Routing is storage but no outgoing edge is typed as memory.')
+        }
         const hasStorageTarget = outgoing.some((edge) => {
           const target = workflow.nodes.find((candidate) => candidate.id === edge.target)
           return target?.data.role === 'storage'

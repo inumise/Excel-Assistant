@@ -2,10 +2,12 @@
 
 import {
   Eraser,
+  Highlighter,
   MousePointer2,
   Pencil,
   Redo2,
   RotateCcw,
+  Shapes,
   Square,
   Type,
   WandSparkles,
@@ -13,6 +15,7 @@ import {
 } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { MindMapTool } from '@/components/mindmap/types'
+import { TOOL_DEFINITIONS } from '@/components/mindmap/tool-registry'
 
 interface ToolboxProps {
   activeTool: MindMapTool
@@ -52,6 +55,17 @@ function ToolButton({ title, active = false, onClick, disabled = false, children
   )
 }
 
+const toolIconMap: Record<MindMapTool, ReactNode> = {
+  select: <MousePointer2 className="h-4 w-4" />,
+  box: <Square className="h-4 w-4" />,
+  shape: <Shapes className="h-4 w-4" />,
+  'ai-box': <WandSparkles className="h-4 w-4" />,
+  text: <Type className="h-4 w-4" />,
+  pencil: <Pencil className="h-4 w-4" />,
+  highlighter: <Highlighter className="h-4 w-4" />,
+  eraser: <Eraser className="h-4 w-4" />,
+}
+
 export function Toolbox({
   activeTool,
   onSelectTool,
@@ -63,40 +77,16 @@ export function Toolbox({
 }: ToolboxProps) {
   return (
     <div className="flex flex-col gap-2 rounded-xl border border-slate-200 bg-white p-2 shadow-sm">
-      <ToolButton
-        title="Select"
-        active={activeTool === 'select'}
-        onClick={() => onSelectTool('select')}
-      >
-        <MousePointer2 className="h-4 w-4" />
-      </ToolButton>
-      <ToolButton title="Box" active={activeTool === 'box'} onClick={() => onSelectTool('box')}>
-        <Square className="h-4 w-4" />
-      </ToolButton>
-      <ToolButton
-        title="AI Box"
-        active={activeTool === 'ai-box'}
-        onClick={() => onSelectTool('ai-box')}
-      >
-        <WandSparkles className="h-4 w-4" />
-      </ToolButton>
-      <ToolButton title="Text" active={activeTool === 'text'} onClick={() => onSelectTool('text')}>
-        <Type className="h-4 w-4" />
-      </ToolButton>
-      <ToolButton
-        title="Pencil"
-        active={activeTool === 'pencil'}
-        onClick={() => onSelectTool('pencil')}
-      >
-        <Pencil className="h-4 w-4" />
-      </ToolButton>
-      <ToolButton
-        title="Eraser"
-        active={activeTool === 'eraser'}
-        onClick={() => onSelectTool('eraser')}
-      >
-        <Eraser className="h-4 w-4" />
-      </ToolButton>
+      {TOOL_DEFINITIONS.map((tool) => (
+        <ToolButton
+          key={tool.id}
+          title={tool.label}
+          active={activeTool === tool.id}
+          onClick={() => onSelectTool(tool.id)}
+        >
+          {toolIconMap[tool.id]}
+        </ToolButton>
+      ))}
 
       <div className="my-1 h-px bg-slate-200" />
 
