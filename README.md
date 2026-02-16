@@ -13,6 +13,9 @@ Palette: `#1A1A1A` / `#FFD700` / `#C9A483`
   - Graphic-app style map tools: Select, Text, Pencil, Eraser
   - Freehand drawing layer (ink) with color/width, undo, and clear
   - Text label nodes with font, size, color, background, and style controls
+  - Logic blocks: Buffer Queue + Shared Storage (Database/Text/Excel)
+  - Buffer blocks support queue size, drop policy, and release mode
+  - Storage blocks support multi in/out lanes and many-reader patterns
   - Futuristic clean-white style with deep RGB pulse/wave motion
   - Corporate role templates + universal custom role builder
   - Build any org/tool/function structure with drag-to-create blocks

@@ -417,6 +417,54 @@ const libraryItems: LibraryItem[] = [
     defaultCapabilities: ['annotation', 'heading', 'notes'],
   },
   {
+    id: 'buffer-queue',
+    label: 'Buffer Queue Block',
+    category: 'tool',
+    description: 'Holds prompts/messages until output target is ready.',
+    icon: KanbanSquare,
+    accent: '#B45309',
+    role: 'buffer',
+    edgeType: 'ai',
+    defaultPrompt: '',
+    defaultCapabilities: ['queue', 'wait', 'release-control'],
+  },
+  {
+    id: 'storage-database',
+    label: 'Storage: Database',
+    category: 'tool',
+    description: 'Shared structured storage for many AI workers.',
+    icon: Database,
+    accent: '#0F766E',
+    role: 'storage',
+    edgeType: 'api',
+    defaultPrompt: '',
+    defaultCapabilities: ['shared memory', 'json', 'multi-reader'],
+  },
+  {
+    id: 'storage-text',
+    label: 'Storage: Text Vault',
+    category: 'tool',
+    description: 'Shared plain-text storage for writing and reading context.',
+    icon: Database,
+    accent: '#0EA5E9',
+    role: 'storage',
+    edgeType: 'ai',
+    defaultPrompt: '',
+    defaultCapabilities: ['notes', 'transcript', 'context'],
+  },
+  {
+    id: 'storage-excel',
+    label: 'Storage: Excel Table',
+    category: 'tool',
+    description: 'Shared tabular storage for spreadsheet-style rows.',
+    icon: FileSpreadsheet,
+    accent: '#16A34A',
+    role: 'storage',
+    edgeType: 'api',
+    defaultPrompt: '',
+    defaultCapabilities: ['table rows', 'excel mode', 'multi-reader'],
+  },
+  {
     id: 'universal-function',
     label: 'Universal Function Node',
     category: 'function',
@@ -581,11 +629,66 @@ function TextNode({ data, selected }: NodeProps<FlowNodeData>) {
   )
 }
 
+function BufferNode({ data, selected }: NodeProps<FlowNodeData>) {
+  const config = {
+    maxItems: data.bufferConfig?.maxItems || 25,
+    releaseMode: data.bufferConfig?.releaseMode || 'when-target-ready',
+    dropPolicy: data.bufferConfig?.dropPolicy || 'oldest',
+  }
+
+  return (
+    <NodeShell title={data.label} subtitle={data.workerType || 'Buffer Queue'} selected={selected}>
+      <Handle type="target" id="in-a" position={Position.Left} style={{ top: '35%' }} className={inHandleClass} />
+      <Handle type="target" id="in-b" position={Position.Left} style={{ top: '70%' }} className={inHandleClass} />
+      <div className="rounded-lg border border-[#FDE68A] bg-[#FFFBEB] p-2 text-[11px] text-[#92400E]">
+        Queue size: {config.maxItems} • Mode: {config.releaseMode} • Drop: {config.dropPolicy}
+      </div>
+      <p className="mt-2 text-[11px] text-[#92400E]">
+        Buffers incoming prompts and releases based on readiness mode.
+      </p>
+      <Handle type="source" id="out-a" position={Position.Right} style={{ top: '35%' }} className={outHandleClass} />
+      <Handle type="source" id="out-b" position={Position.Right} style={{ top: '70%' }} className={outHandleClass} />
+    </NodeShell>
+  )
+}
+
+function StorageNode({ data, selected }: NodeProps<FlowNodeData>) {
+  const config = {
+    storageType: data.storageConfig?.storageType || 'database',
+    key: data.storageConfig?.key || 'shared-storage',
+    allowWrite: data.storageConfig?.allowWrite !== false,
+    allowRead: data.storageConfig?.allowRead !== false,
+    schemaHint: data.storageConfig?.schemaHint || 'json',
+  }
+
+  return (
+    <NodeShell title={data.label} subtitle={data.workerType || 'Storage Block'} selected={selected}>
+      <Handle type="target" id="in-a" position={Position.Left} style={{ top: '28%' }} className={inHandleClass} />
+      <Handle type="target" id="in-b" position={Position.Left} style={{ top: '55%' }} className={inHandleClass} />
+      <Handle type="target" id="in-c" position={Position.Left} style={{ top: '82%' }} className={inHandleClass} />
+      <div className="rounded-lg border border-[#6EE7B7] bg-[#ECFDF5] p-2 text-[11px] text-[#065F46]">
+        Type: {config.storageType} • Key: {config.key}
+        <br />
+        Write: {config.allowWrite ? 'on' : 'off'} • Read: {config.allowRead ? 'on' : 'off'} • Hint:{' '}
+        {config.schemaHint}
+      </div>
+      <p className="mt-2 text-[11px] text-[#047857]">
+        Shared storage lane with multiple in/out ports for many AI readers/writers.
+      </p>
+      <Handle type="source" id="out-a" position={Position.Right} style={{ top: '28%' }} className={outHandleClass} />
+      <Handle type="source" id="out-b" position={Position.Right} style={{ top: '55%' }} className={outHandleClass} />
+      <Handle type="source" id="out-c" position={Position.Right} style={{ top: '82%' }} className={outHandleClass} />
+    </NodeShell>
+  )
+}
+
 const nodeTypes = {
   manager: ManagerNode,
   programmer: ProgrammerNode,
   code: CodeNode,
   text: TextNode,
+  buffer: BufferNode,
+  storage: StorageNode,
 }
 
 function toSerializableWorkflow(params: {
@@ -612,6 +715,8 @@ function toSerializableWorkflow(params: {
         prompt: node.data.prompt,
         textContent: node.data.textContent,
         textStyle: node.data.textStyle,
+        bufferConfig: node.data.bufferConfig,
+        storageConfig: node.data.storageConfig,
         capabilities: node.data.capabilities,
         codeSnippet: node.data.codeSnippet,
         testsPassed: node.data.testsPassed,
@@ -1057,7 +1162,14 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
     }
     setNodes((prev) =>
       prev.map((node) => {
-        if (node.data.role === 'code' || node.data.role === 'text') return node
+        if (
+          node.data.role === 'code' ||
+          node.data.role === 'text' ||
+          node.data.role === 'buffer' ||
+          node.data.role === 'storage'
+        ) {
+          return node
+        }
         const existing = node.data.prompt || ''
         const withoutHeader = existing.includes('\n---\n')
           ? existing.split('\n---\n').slice(1).join('\n---\n')
@@ -1334,6 +1446,32 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
         prompt: item.defaultPrompt,
         textContent: item.role === 'text' ? 'New text label' : undefined,
         textStyle: item.role === 'text' ? { ...defaultTextStyle } : undefined,
+        bufferConfig:
+          item.role === 'buffer'
+            ? {
+                maxItems: 25,
+                releaseMode: 'when-target-ready',
+                dropPolicy: 'oldest',
+              }
+            : undefined,
+        storageConfig:
+          item.role === 'storage'
+            ? {
+                storageType: item.id.includes('excel')
+                  ? 'excel'
+                  : item.id.includes('text')
+                  ? 'text'
+                  : 'database',
+                key: `${item.id}-${Date.now()}`,
+                allowWrite: true,
+                allowRead: true,
+                schemaHint: item.id.includes('excel')
+                  ? 'table'
+                  : item.id.includes('text')
+                  ? 'plain-text'
+                  : 'json',
+              }
+            : undefined,
         capabilities: [...item.defaultCapabilities],
         codeSnippet:
           item.role === 'code'
@@ -1369,7 +1507,12 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
       icon: Sparkles,
       accent: '#2563EB',
       role: customWorkerRole,
-      edgeType: customWorkerRole === 'code' ? 'code' : 'ai',
+      edgeType:
+        customWorkerRole === 'code'
+          ? 'code'
+          : customWorkerRole === 'storage'
+          ? 'api'
+          : 'ai',
       defaultPrompt: prompt,
       defaultCapabilities: caps.length > 0 ? caps : ['custom-task'],
     }
@@ -2371,6 +2514,8 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
                         <option value="manager">Manager</option>
                         <option value="programmer">Programmer</option>
                         <option value="code">Code</option>
+                        <option value="buffer">Buffer</option>
+                        <option value="storage">Storage</option>
                         <option value="text">Text</option>
                       </select>
                       <Input
@@ -2482,6 +2627,8 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
                     if (node.type === 'manager') return '#F59E0B'
                     if (node.type === 'programmer') return '#7C3AED'
                     if (node.type === 'text') return '#0F172A'
+                    if (node.type === 'buffer') return '#B45309'
+                    if (node.type === 'storage') return '#0F766E'
                     return '#2563EB'
                   }}
                 />
@@ -2789,23 +2936,40 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
                                       textContent:
                                         nextRole === 'text'
                                           ? node.data.textContent || node.data.label || 'Text label'
-                                          : node.data.textContent,
+                                          : undefined,
                                       textStyle:
                                         nextRole === 'text'
                                           ? {
                                               ...defaultTextStyle,
                                               ...(node.data.textStyle || {}),
                                             }
-                                          : node.data.textStyle,
+                                          : undefined,
+                                      bufferConfig:
+                                        nextRole === 'buffer'
+                                          ? {
+                                              maxItems: node.data.bufferConfig?.maxItems || 25,
+                                              releaseMode:
+                                                node.data.bufferConfig?.releaseMode || 'when-target-ready',
+                                              dropPolicy: node.data.bufferConfig?.dropPolicy || 'oldest',
+                                            }
+                                          : undefined,
+                                      storageConfig:
+                                        nextRole === 'storage'
+                                          ? {
+                                              storageType: node.data.storageConfig?.storageType || 'database',
+                                              key: node.data.storageConfig?.key || `storage-${node.id}`,
+                                              allowWrite: node.data.storageConfig?.allowWrite !== false,
+                                              allowRead: node.data.storageConfig?.allowRead !== false,
+                                              schemaHint: node.data.storageConfig?.schemaHint || 'json',
+                                            }
+                                          : undefined,
                                       codeSnippet:
                                         nextRole === 'code'
                                           ? node.data.codeSnippet || {
                                               language: 'typescript',
                                               content: 'export const runTask = () => "custom function output";\n',
                                             }
-                                          : nextRole === 'text'
-                                          ? undefined
-                                          : node.data.codeSnippet,
+                                          : undefined,
                                     },
                                   }
                                 : node
@@ -2817,6 +2981,8 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
                         <option value="manager">Manager</option>
                         <option value="programmer">Programmer</option>
                         <option value="code">Code</option>
+                        <option value="buffer">Buffer</option>
+                        <option value="storage">Storage</option>
                         <option value="text">Text</option>
                       </select>
 
@@ -3006,6 +3172,160 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
                             rows={8}
                             className="w-full rounded-lg border border-[#CBD5E1] bg-white px-2 py-1 font-mono text-[11px] text-[#0F172A] outline-none"
                           />
+                        </>
+                      )}
+
+                      {selectedNode.data.role === 'buffer' && (
+                        <>
+                          <label className="text-[11px] text-[#334155]">Buffer max items</label>
+                          <input
+                            type="number"
+                            min={1}
+                            max={500}
+                            value={selectedNode.data.bufferConfig?.maxItems || 25}
+                            onChange={(event) =>
+                              patchNode(selectedNode.id, {
+                                bufferConfig: {
+                                  maxItems: Number(event.target.value),
+                                  releaseMode:
+                                    selectedNode.data.bufferConfig?.releaseMode || 'when-target-ready',
+                                  dropPolicy: selectedNode.data.bufferConfig?.dropPolicy || 'oldest',
+                                },
+                              })
+                            }
+                            className="h-8 w-full rounded border border-[#CBD5E1] bg-white px-2 text-[11px] text-[#334155]"
+                          />
+
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="text-[11px] text-[#334155]">Release mode</label>
+                              <select
+                                value={selectedNode.data.bufferConfig?.releaseMode || 'when-target-ready'}
+                                onChange={(event) =>
+                                  patchNode(selectedNode.id, {
+                                    bufferConfig: {
+                                      maxItems: selectedNode.data.bufferConfig?.maxItems || 25,
+                                      releaseMode: event.target.value as 'when-target-ready' | 'immediate',
+                                      dropPolicy: selectedNode.data.bufferConfig?.dropPolicy || 'oldest',
+                                    },
+                                  })
+                                }
+                                className="h-8 w-full rounded border border-[#CBD5E1] bg-white px-2 text-[11px] text-[#334155]"
+                              >
+                                <option value="when-target-ready">When target ready</option>
+                                <option value="immediate">Immediate</option>
+                              </select>
+                            </div>
+                            <div>
+                              <label className="text-[11px] text-[#334155]">Drop policy</label>
+                              <select
+                                value={selectedNode.data.bufferConfig?.dropPolicy || 'oldest'}
+                                onChange={(event) =>
+                                  patchNode(selectedNode.id, {
+                                    bufferConfig: {
+                                      maxItems: selectedNode.data.bufferConfig?.maxItems || 25,
+                                      releaseMode:
+                                        selectedNode.data.bufferConfig?.releaseMode || 'when-target-ready',
+                                      dropPolicy: event.target.value as 'oldest' | 'newest' | 'reject',
+                                    },
+                                  })
+                                }
+                                className="h-8 w-full rounded border border-[#CBD5E1] bg-white px-2 text-[11px] text-[#334155]"
+                              >
+                                <option value="oldest">Drop oldest</option>
+                                <option value="newest">Drop newest</option>
+                                <option value="reject">Reject new</option>
+                              </select>
+                            </div>
+                          </div>
+                        </>
+                      )}
+
+                      {selectedNode.data.role === 'storage' && (
+                        <>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="text-[11px] text-[#334155]">Storage type</label>
+                              <select
+                                value={selectedNode.data.storageConfig?.storageType || 'database'}
+                                onChange={(event) =>
+                                  patchNode(selectedNode.id, {
+                                    storageConfig: {
+                                      ...selectedNode.data.storageConfig,
+                                      storageType: event.target.value as 'database' | 'text' | 'excel',
+                                    },
+                                  })
+                                }
+                                className="h-8 w-full rounded border border-[#CBD5E1] bg-white px-2 text-[11px] text-[#334155]"
+                              >
+                                <option value="database">Database</option>
+                                <option value="text">Text</option>
+                                <option value="excel">Excel</option>
+                              </select>
+                            </div>
+                            <div>
+                              <label className="text-[11px] text-[#334155]">Schema hint</label>
+                              <Input
+                                value={selectedNode.data.storageConfig?.schemaHint || ''}
+                                onChange={(event) =>
+                                  patchNode(selectedNode.id, {
+                                    storageConfig: {
+                                      ...selectedNode.data.storageConfig,
+                                      schemaHint: event.target.value,
+                                    },
+                                  })
+                                }
+                                className="h-8 border-[#CBD5E1] bg-white text-xs text-[#0F172A]"
+                              />
+                            </div>
+                          </div>
+
+                          <label className="text-[11px] text-[#334155]">Storage key</label>
+                          <Input
+                            value={selectedNode.data.storageConfig?.key || ''}
+                            onChange={(event) =>
+                              patchNode(selectedNode.id, {
+                                storageConfig: {
+                                  ...selectedNode.data.storageConfig,
+                                  key: event.target.value,
+                                },
+                              })
+                            }
+                            className="h-8 border-[#CBD5E1] bg-white text-xs text-[#0F172A]"
+                          />
+
+                          <div className="grid grid-cols-2 gap-2">
+                            <label className="flex items-center justify-between rounded border border-[#CBD5E1] bg-[#F8FAFC] px-2 py-1 text-[11px] text-[#334155]">
+                              Allow write
+                              <input
+                                type="checkbox"
+                                checked={selectedNode.data.storageConfig?.allowWrite !== false}
+                                onChange={(event) =>
+                                  patchNode(selectedNode.id, {
+                                    storageConfig: {
+                                      ...selectedNode.data.storageConfig,
+                                      allowWrite: event.target.checked,
+                                    },
+                                  })
+                                }
+                              />
+                            </label>
+                            <label className="flex items-center justify-between rounded border border-[#CBD5E1] bg-[#F8FAFC] px-2 py-1 text-[11px] text-[#334155]">
+                              Allow read
+                              <input
+                                type="checkbox"
+                                checked={selectedNode.data.storageConfig?.allowRead !== false}
+                                onChange={(event) =>
+                                  patchNode(selectedNode.id, {
+                                    storageConfig: {
+                                      ...selectedNode.data.storageConfig,
+                                      allowRead: event.target.checked,
+                                    },
+                                  })
+                                }
+                              />
+                            </label>
+                          </div>
                         </>
                       )}
 

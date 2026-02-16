@@ -1,4 +1,4 @@
-export type NodeRole = 'manager' | 'programmer' | 'code' | 'text'
+export type NodeRole = 'manager' | 'programmer' | 'code' | 'text' | 'buffer' | 'storage'
 
 export type EdgeDataType = 'api' | 'code' | 'ai'
 
@@ -48,6 +48,20 @@ export interface WorkflowTextStyle {
   shadow?: boolean
 }
 
+export interface BufferNodeConfig {
+  maxItems?: number
+  releaseMode?: 'when-target-ready' | 'immediate'
+  dropPolicy?: 'oldest' | 'newest' | 'reject'
+}
+
+export interface StorageNodeConfig {
+  storageType?: 'database' | 'text' | 'excel'
+  key?: string
+  allowWrite?: boolean
+  allowRead?: boolean
+  schemaHint?: string
+}
+
 export interface WorkflowNodeData {
   label: string
   role: NodeRole
@@ -55,6 +69,8 @@ export interface WorkflowNodeData {
   prompt: string
   textContent?: string
   textStyle?: WorkflowTextStyle
+  bufferConfig?: BufferNodeConfig
+  storageConfig?: StorageNodeConfig
   capabilities?: string[]
   codeSnippet?: CodeSnippet
   testsPassed?: boolean
