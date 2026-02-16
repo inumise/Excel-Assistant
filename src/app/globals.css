@@ -4,53 +4,63 @@
 
 @layer base {
   :root {
-    --background: 210 40% 98%;
-    --foreground: 222.2 47.4% 11.2%;
+    --background: 0 0% 100%;
+    --foreground: 220 20% 14%;
     --card: 0 0% 100%;
-    --card-foreground: 222.2 47.4% 11.2%;
+    --card-foreground: 220 20% 14%;
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 47.4% 11.2%;
-    --primary: 221 83% 53%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 221 83% 53%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 221 83% 53%;
-    --radius: 0.75rem;
+    --popover-foreground: 220 20% 14%;
+    --primary: 220 14% 30%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 14% 96%;
+    --secondary-foreground: 220 20% 14%;
+    --muted: 220 14% 96%;
+    --muted-foreground: 220 10% 46%;
+    --accent: 220 14% 93%;
+    --accent-foreground: 220 20% 14%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 14% 90%;
+    --input: 220 14% 90%;
+    --ring: 220 14% 50%;
+    --radius: 0.625rem;
 
-    /* Mind-map visual system */
-    --mind-bg: #f5f7fb;
-    --mind-bg-accent: #f8faff;
+    /* Clean white system */
+    --mind-bg: #ffffff;
+    --mind-bg-accent: #fafbfc;
     --mind-surface: #ffffff;
-    --mind-surface-soft: #fbfcff;
-    --mind-border: #d9e1ec;
-    --mind-border-strong: #c5d1e2;
-    --mind-text: #172538;
-    --mind-text-muted: #54657d;
+    --mind-surface-soft: #fafbfd;
+    --mind-border: #e8eaef;
+    --mind-border-strong: #d4d8e0;
+    --mind-text: #1a1f2e;
+    --mind-text-muted: #6b7280;
+    --mind-text-light: #9ca3af;
 
-    --mind-accent-blue: #3f5f81;
-    --mind-accent-violet: #5c517e;
-    --mind-accent-teal: #3f7071;
-    --mind-accent-error: #a26356;
+    --mind-accent-blue: #4a6fa5;
+    --mind-accent-violet: #7c6fad;
+    --mind-accent-teal: #4aa5a0;
+    --mind-accent-error: #c45c4f;
 
-    --mind-edge-prompt: #4a5f7c;
-    --mind-edge-context: #4d6d79;
-    --mind-edge-code: #5e5a81;
-    --mind-edge-event: #4e677f;
-    --mind-edge-memory: #496983;
-    --mind-edge-api: #4f6380;
-    --mind-edge-ai: #5f5b84;
-    --mind-edge-hover: #627fa7;
-    --mind-edge-active: #6f90be;
+    --mind-edge-prompt: #6b7fa8;
+    --mind-edge-context: #5a8f8a;
+    --mind-edge-code: #7c6fad;
+    --mind-edge-event: #6b7fa8;
+    --mind-edge-memory: #5a8f8a;
+    --mind-edge-api: #6b7fa8;
+    --mind-edge-ai: #7c6fad;
+    --mind-edge-hover: #4a6fa5;
+    --mind-edge-active: #4a6fa5;
 
-    --mind-grid-dot: rgba(67, 84, 113, 0.11);
+    --mind-grid-dot: rgba(0, 0, 0, 0.04);
+
+    /* Rainbow pastel palette */
+    --rainbow-pink: #ffc2d1;
+    --rainbow-purple: #d4b8e0;
+    --rainbow-blue: #a8c8f0;
+    --rainbow-cyan: #a0e0e0;
+    --rainbow-green: #b8e6c8;
+    --rainbow-yellow: #f7e6a0;
+    --rainbow-orange: #ffd4a8;
 
     --mind-motion-wave-duration-a: 160s;
     --mind-motion-wave-duration-b: 210s;
@@ -70,7 +80,7 @@
 }
 
 body {
-  background: linear-gradient(165deg, var(--mind-bg) 0%, var(--mind-bg-accent) 48%, var(--mind-bg) 100%);
+  background: var(--mind-bg);
   min-height: 100vh;
   color: var(--mind-text);
 }
@@ -80,126 +90,170 @@ body {
 }
 
 .mind-app-body {
-  background: linear-gradient(165deg, var(--mind-bg) 0%, var(--mind-bg-accent) 48%, var(--mind-bg) 100%);
+  background: var(--mind-bg);
   color: var(--mind-text);
 }
+
+/* =====================================================
+   RAINBOW GRADIENT ANIMATION SYSTEM
+   ===================================================== */
+
+@property --rainbow-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+
+@keyframes rainbowRotate {
+  0% { --rainbow-angle: 0deg; }
+  100% { --rainbow-angle: 360deg; }
+}
+
+@keyframes rainbowShift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+@keyframes rainbowGlow {
+  0%, 100% { opacity: 0.3; }
+  50% { opacity: 0.55; }
+}
+
+@keyframes subtlePulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.005); }
+}
+
+@keyframes smoothSlideIn {
+  from { opacity: 0; transform: translateX(12px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes smoothSlideDown {
+  from { opacity: 0; transform: translateY(-8px); max-height: 0; }
+  to { opacity: 1; transform: translateY(0); max-height: 1000px; }
+}
+
+@keyframes dropSnap {
+  0% { transform: scale(0.92); opacity: 0.6; }
+  60% { transform: scale(1.02); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes connectionDraw {
+  from { stroke-dashoffset: 100; }
+  to { stroke-dashoffset: 0; }
+}
+
+.rainbow-border {
+  position: relative;
+  border: 1px solid transparent;
+  background-clip: padding-box;
+}
+
+.rainbow-border::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(
+    var(--rainbow-angle, 0deg),
+    var(--rainbow-pink),
+    var(--rainbow-purple),
+    var(--rainbow-blue),
+    var(--rainbow-cyan),
+    var(--rainbow-green),
+    var(--rainbow-yellow),
+    var(--rainbow-orange),
+    var(--rainbow-pink)
+  );
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: rainbowRotate 8s linear infinite;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.rainbow-border-subtle::before {
+  opacity: 0.5;
+  animation: rainbowRotate 12s linear infinite;
+}
+
+.rainbow-border-glow::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: inherit;
+  background: linear-gradient(
+    var(--rainbow-angle, 0deg),
+    var(--rainbow-pink),
+    var(--rainbow-purple),
+    var(--rainbow-blue),
+    var(--rainbow-cyan),
+    var(--rainbow-green),
+    var(--rainbow-yellow),
+    var(--rainbow-orange),
+    var(--rainbow-pink)
+  );
+  opacity: 0.12;
+  filter: blur(8px);
+  animation: rainbowRotate 8s linear infinite, rainbowGlow 4s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* =====================================================
+   SURFACE PANELS
+   ===================================================== */
 
 .mind-surface-panel {
   border: 1px solid var(--mind-border);
   background: var(--mind-surface);
-  box-shadow: 0 8px 24px rgba(22, 34, 53, 0.055);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  transition: box-shadow 200ms ease, border-color 200ms ease;
 }
 
+.mind-surface-panel:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+/* =====================================================
+   INPUT FIELDS
+   ===================================================== */
+
 .mind-input-field {
-  border: 1px solid var(--mind-border-strong);
-  background: var(--mind-surface-soft);
+  border: 1px solid var(--mind-border);
+  background: var(--mind-surface);
   color: var(--mind-text);
+  transition: border-color 200ms ease, box-shadow 200ms ease;
 }
 
 .mind-input-field:focus {
-  border-color: color-mix(in srgb, var(--mind-accent-blue) 62%, #d2dbe9);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--mind-accent-blue) 16%, transparent);
+  border-color: var(--mind-border-strong);
+  box-shadow: 0 0 0 2px rgba(74, 111, 165, 0.08);
+  outline: none;
 }
 
-@keyframes mindWaveDriftA {
-  0% {
-    transform: translate3d(-8%, -4%, 0) scale(1);
-  }
-  50% {
-    transform: translate3d(9%, 5%, 0) scale(1.03);
-  }
-  100% {
-    transform: translate3d(-8%, -4%, 0) scale(1);
-  }
-}
-
-@keyframes mindWaveDriftB {
-  0% {
-    transform: translate3d(8%, -8%, 0) scale(1.06);
-  }
-  50% {
-    transform: translate3d(-11%, 7%, 0) scale(1.02);
-  }
-  100% {
-    transform: translate3d(8%, -8%, 0) scale(1.06);
-  }
-}
-
-@keyframes mindWaveDriftC {
-  0% {
-    transform: translate3d(-6%, 7%, 0) scale(1.04);
-  }
-  50% {
-    transform: translate3d(7%, -8%, 0) scale(1);
-  }
-  100% {
-    transform: translate3d(-6%, 7%, 0) scale(1.04);
-  }
-}
-
-@keyframes mindEdgeFlow {
-  0% {
-    stroke-dashoffset: 0;
-  }
-  100% {
-    stroke-dashoffset: -26;
-  }
-}
-
-@keyframes mindNodePulse {
-  0%,
-  100% {
-    opacity: 0.16;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 0.33;
-    transform: scale(1.018);
-  }
-}
+/* =====================================================
+   CANVAS
+   ===================================================== */
 
 .mind-canvas-shell {
-  border: 1px solid var(--mind-border);
   background: var(--mind-surface);
-  box-shadow: 0 12px 36px rgba(22, 34, 53, 0.07);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  position: relative;
+}
+
+.mind-canvas-shell.drop-active {
+  box-shadow: 0 0 0 2px rgba(74, 111, 165, 0.15);
 }
 
 .mind-wave-layer {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  overflow: hidden;
-  z-index: 0;
-}
-
-.mind-wave-band {
-  position: absolute;
-  width: 140%;
-  height: 140%;
-  border-radius: 50%;
-  opacity: 0.22;
-  will-change: transform;
-}
-
-.mind-wave-band--blue {
-  top: -42%;
-  left: -20%;
-  background: radial-gradient(circle at 35% 40%, rgba(90, 130, 183, 0.26), transparent 62%);
-  animation: mindWaveDriftA var(--mind-motion-wave-duration-a) ease-in-out infinite;
-}
-
-.mind-wave-band--violet {
-  top: -26%;
-  right: -38%;
-  background: radial-gradient(circle at 52% 48%, rgba(116, 96, 162, 0.23), transparent 66%);
-  animation: mindWaveDriftB var(--mind-motion-wave-duration-b) ease-in-out infinite;
-}
-
-.mind-wave-band--teal {
-  bottom: -48%;
-  left: -18%;
-  background: radial-gradient(circle at 44% 46%, rgba(87, 140, 145, 0.24), transparent 65%);
-  animation: mindWaveDriftC var(--mind-motion-wave-duration-c) ease-in-out infinite;
+  display: none;
 }
 
 .mind-reactflow {
@@ -207,64 +261,311 @@ body {
   z-index: 1;
 }
 
+/* =====================================================
+   NODE CARDS -- White + Rainbow Outline
+   ===================================================== */
+
 .mind-node-card {
   position: relative;
   isolation: isolate;
-  border: 1px solid var(--mind-border-strong);
-  background: color-mix(in srgb, var(--mind-surface) 92%, #eff4fb);
+  background: var(--mind-surface);
+  border: 1px solid var(--mind-border);
+  transition: box-shadow 200ms ease, border-color 200ms ease, transform 200ms ease;
 }
 
-.mind-node-card::after {
+.mind-node-card::before {
   content: '';
   position: absolute;
   inset: -1px;
   border-radius: inherit;
+  padding: 1.5px;
+  background: linear-gradient(
+    var(--rainbow-angle, 0deg),
+    var(--rainbow-pink),
+    var(--rainbow-purple),
+    var(--rainbow-blue),
+    var(--rainbow-cyan),
+    var(--rainbow-green),
+    var(--rainbow-yellow),
+    var(--rainbow-orange),
+    var(--rainbow-pink)
+  );
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: rainbowRotate 6s linear infinite;
   pointer-events: none;
   z-index: -1;
-  background: radial-gradient(circle at 28% 26%, rgba(88, 112, 157, 0.24), transparent 62%);
-  opacity: 0.14;
+  opacity: 0.4;
+  transition: opacity 300ms ease;
+}
+
+.mind-node-card:hover::before {
+  opacity: 0.75;
+}
+
+.mind-node-card:hover {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+  transform: translateY(-1px);
+}
+
+.mind-node-card::after {
+  display: none;
 }
 
 .mind-node-card--selected {
-  border-color: color-mix(in srgb, var(--mind-accent-blue) 58%, #ccd8e8);
-  box-shadow: 0 0 0 2px rgba(92, 118, 160, 0.16);
+  border-color: transparent;
 }
 
-.mind-node-card--running::after {
-  background: radial-gradient(circle at 30% 30%, rgba(80, 121, 181, 0.34), transparent 64%);
-  animation: mindNodePulse var(--mind-motion-node-pulse) ease-in-out infinite;
+.mind-node-card--selected::before {
+  opacity: 0.9;
+  padding: 2px;
+}
+
+.mind-node-card--selected::after {
+  display: block;
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: inherit;
+  background: linear-gradient(
+    var(--rainbow-angle, 0deg),
+    var(--rainbow-pink),
+    var(--rainbow-purple),
+    var(--rainbow-blue),
+    var(--rainbow-cyan),
+    var(--rainbow-green),
+    var(--rainbow-yellow),
+    var(--rainbow-orange),
+    var(--rainbow-pink)
+  );
+  opacity: 0.1;
+  filter: blur(8px);
+  animation: rainbowRotate 6s linear infinite;
+  pointer-events: none;
+  z-index: -2;
+}
+
+.mind-node-card--running::before {
+  opacity: 1;
+  animation: rainbowRotate 3s linear infinite;
 }
 
 .mind-node-card--error {
-  border-color: color-mix(in srgb, var(--mind-accent-error) 72%, #d8bdb7);
+  border-color: rgba(196, 92, 79, 0.3);
 }
 
-.mind-node-card--error::after {
-  opacity: 0.26;
-  background: radial-gradient(circle at 30% 30%, rgba(162, 99, 86, 0.28), transparent 64%);
+.mind-node-card--error::before {
+  background: linear-gradient(45deg, #ffc2d1, #e8a0a0, #ffc2d1);
+  opacity: 0.6;
 }
+
+/* =====================================================
+   TOOL BUTTONS
+   ===================================================== */
 
 .mind-tool-button {
   border: 1px solid var(--mind-border);
   background: var(--mind-surface);
-  color: #34445c;
-  transition: background-color 180ms ease, border-color 180ms ease, color 180ms ease;
+  color: var(--mind-text);
+  transition: all 200ms ease;
 }
 
 .mind-tool-button:hover {
-  background: #f8faff;
+  background: var(--mind-bg-accent);
   border-color: var(--mind-border-strong);
 }
 
 .mind-tool-button--active {
-  border-color: color-mix(in srgb, var(--mind-accent-blue) 65%, #d0dbe8);
-  background: color-mix(in srgb, var(--mind-accent-blue) 10%, #ffffff);
-  color: color-mix(in srgb, var(--mind-accent-blue) 90%, #1d2f43);
+  position: relative;
+  border-color: transparent;
+  background: var(--mind-surface);
+  color: var(--mind-text);
 }
+
+.mind-tool-button--active::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(
+    var(--rainbow-angle, 0deg),
+    var(--rainbow-pink),
+    var(--rainbow-purple),
+    var(--rainbow-blue),
+    var(--rainbow-cyan),
+    var(--rainbow-green),
+    var(--rainbow-yellow),
+    var(--rainbow-orange),
+    var(--rainbow-pink)
+  );
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: rainbowRotate 6s linear infinite;
+  pointer-events: none;
+}
+
+/* =====================================================
+   DRAGGABLE ITEMS
+   ===================================================== */
+
+.draggable-card {
+  position: relative;
+  background: var(--mind-surface);
+  border: 1px solid var(--mind-border);
+  cursor: grab;
+  transition: all 200ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  user-select: none;
+}
+
+.draggable-card:hover {
+  border-color: transparent;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06);
+  transform: translateY(-1px);
+}
+
+.draggable-card:hover::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(
+    var(--rainbow-angle, 0deg),
+    var(--rainbow-pink),
+    var(--rainbow-purple),
+    var(--rainbow-blue),
+    var(--rainbow-cyan),
+    var(--rainbow-green),
+    var(--rainbow-yellow),
+    var(--rainbow-orange),
+    var(--rainbow-pink)
+  );
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: rainbowRotate 6s linear infinite;
+  pointer-events: none;
+}
+
+.draggable-card:active {
+  cursor: grabbing;
+  transform: scale(1.03);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+}
+
+/* =====================================================
+   DROP ZONE
+   ===================================================== */
+
+.drop-zone-indicator {
+  border: 2px dashed transparent;
+  background-image: linear-gradient(white, white),
+    linear-gradient(
+      var(--rainbow-angle, 0deg),
+      var(--rainbow-pink),
+      var(--rainbow-purple),
+      var(--rainbow-blue),
+      var(--rainbow-cyan),
+      var(--rainbow-green),
+      var(--rainbow-yellow),
+      var(--rainbow-orange),
+      var(--rainbow-pink)
+    );
+  background-origin: border-box;
+  background-clip: padding-box, border-box;
+  animation: rainbowRotate 4s linear infinite, subtlePulse 2s ease-in-out infinite;
+}
+
+/* =====================================================
+   COLLAPSIBLE SECTION
+   ===================================================== */
+
+.collapsible-section {
+  overflow: hidden;
+  transition: max-height 300ms cubic-bezier(0.4, 0, 0.2, 1), opacity 300ms ease;
+}
+
+.collapsible-section.collapsed {
+  max-height: 0;
+  opacity: 0;
+}
+
+.collapsible-section.expanded {
+  opacity: 1;
+}
+
+/* =====================================================
+   SIDEBAR
+   ===================================================== */
+
+.sidebar-panel {
+  background: var(--mind-surface);
+  border-right: 1px solid var(--mind-border);
+}
+
+.sidebar-section-header {
+  transition: background-color 200ms ease;
+}
+
+.sidebar-section-header:hover {
+  background: var(--mind-bg-accent);
+}
+
+/* =====================================================
+   PRIMARY ACTION BUTTON (rainbow)
+   ===================================================== */
+
+.btn-primary-rainbow {
+  position: relative;
+  background: var(--mind-text);
+  color: var(--mind-surface);
+  border: none;
+  overflow: hidden;
+  transition: all 200ms ease;
+}
+
+.btn-primary-rainbow:hover {
+  opacity: 0.9;
+}
+
+.btn-primary-rainbow::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1.5px;
+  background: linear-gradient(
+    var(--rainbow-angle, 0deg),
+    var(--rainbow-pink),
+    var(--rainbow-purple),
+    var(--rainbow-blue),
+    var(--rainbow-cyan),
+    var(--rainbow-green),
+    var(--rainbow-yellow),
+    var(--rainbow-orange),
+    var(--rainbow-pink)
+  );
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: rainbowRotate 5s linear infinite;
+  pointer-events: none;
+}
+
+/* =====================================================
+   REACT FLOW OVERRIDES
+   ===================================================== */
 
 .react-flow__controls button {
   background: var(--mind-surface) !important;
-  color: #32455e !important;
+  color: var(--mind-text) !important;
   border-color: var(--mind-border) !important;
 }
 
@@ -276,8 +577,8 @@ body {
 
 .react-flow__edge.mind-edge:hover .react-flow__edge-path {
   stroke: var(--mind-edge-hover);
-  stroke-width: 1.95;
-  filter: drop-shadow(0 0 3px rgba(106, 132, 169, 0.28));
+  stroke-width: 2;
+  filter: drop-shadow(0 0 4px rgba(74, 111, 165, 0.2));
 }
 
 .react-flow__edge.selected.mind-edge .react-flow__edge-path {
@@ -286,48 +587,82 @@ body {
   animation: mindEdgeFlow var(--mind-motion-edge-flow) linear infinite;
 }
 
-.react-flow__edge.mind-edge--prompt .react-flow__edge-path {
-  stroke: var(--mind-edge-prompt);
-}
-.react-flow__edge.mind-edge--context .react-flow__edge-path {
-  stroke: var(--mind-edge-context);
-}
-.react-flow__edge.mind-edge--code .react-flow__edge-path {
-  stroke: var(--mind-edge-code);
-}
-.react-flow__edge.mind-edge--event .react-flow__edge-path {
-  stroke: var(--mind-edge-event);
-}
-.react-flow__edge.mind-edge--memory .react-flow__edge-path {
-  stroke: var(--mind-edge-memory);
-}
-.react-flow__edge.mind-edge--api .react-flow__edge-path {
-  stroke: var(--mind-edge-api);
-}
-.react-flow__edge.mind-edge--ai .react-flow__edge-path {
-  stroke: var(--mind-edge-ai);
+@keyframes mindEdgeFlow {
+  0% { stroke-dashoffset: 0; }
+  100% { stroke-dashoffset: -26; }
 }
 
-html[data-mind-motion='off'] .mind-wave-band,
-html[data-mind-motion='off'] .mind-node-card--running::after,
+@keyframes mindNodePulse {
+  0%, 100% { opacity: 0.16; transform: scale(1); }
+  50% { opacity: 0.33; transform: scale(1.018); }
+}
+
+.react-flow__edge.mind-edge--prompt .react-flow__edge-path { stroke: var(--mind-edge-prompt); }
+.react-flow__edge.mind-edge--context .react-flow__edge-path { stroke: var(--mind-edge-context); }
+.react-flow__edge.mind-edge--code .react-flow__edge-path { stroke: var(--mind-edge-code); }
+.react-flow__edge.mind-edge--event .react-flow__edge-path { stroke: var(--mind-edge-event); }
+.react-flow__edge.mind-edge--memory .react-flow__edge-path { stroke: var(--mind-edge-memory); }
+.react-flow__edge.mind-edge--api .react-flow__edge-path { stroke: var(--mind-edge-api); }
+.react-flow__edge.mind-edge--ai .react-flow__edge-path { stroke: var(--mind-edge-ai); }
+
+.react-flow__edge.edge-pulse-signal .react-flow__edge-path {
+  stroke-linecap: round;
+}
+
+/* =====================================================
+   SCROLLBAR
+   ===================================================== */
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--mind-border);
+  border-radius: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--mind-border-strong);
+}
+
+/* =====================================================
+   REDUCED MOTION
+   ===================================================== */
+
+html[data-mind-motion='off'] .mind-node-card::before,
+html[data-mind-motion='off'] .mind-node-card--selected::after,
+html[data-mind-motion='off'] .mind-tool-button--active::before,
+html[data-mind-motion='off'] .draggable-card:hover::before,
+html[data-mind-motion='off'] .rainbow-border::before,
+html[data-mind-motion='off'] .rainbow-border-glow::after,
+html[data-mind-motion='off'] .btn-primary-rainbow::before,
+html[data-mind-motion='off'] .drop-zone-indicator,
 html[data-mind-motion='off'] .react-flow__edge.selected.mind-edge .react-flow__edge-path {
   animation: none !important;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .mind-wave-band,
-  .mind-node-card--running::after,
+  .mind-node-card::before,
+  .mind-node-card--selected::after,
+  .mind-tool-button--active::before,
+  .draggable-card:hover::before,
+  .rainbow-border::before,
+  .rainbow-border-glow::after,
+  .btn-primary-rainbow::before,
+  .drop-zone-indicator,
   .react-flow__edge.selected.mind-edge .react-flow__edge-path {
     animation: none !important;
   }
 
   .mind-tool-button,
   .mind-node-card,
+  .draggable-card,
   .react-flow__edge.mind-edge .react-flow__edge-path {
     transition: none !important;
   }
-}
-
-.react-flow__edge.edge-pulse-signal .react-flow__edge-path {
-  stroke-linecap: round;
 }

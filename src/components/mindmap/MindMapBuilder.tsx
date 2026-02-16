@@ -1,19 +1,30 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Play, RefreshCw, Save } from 'lucide-react'
+import {
+  Eraser,
+  Highlighter,
+  MousePointer2,
+  Pencil,
+  Play,
+  Redo2,
+  RefreshCw,
+  RotateCcw,
+  Save,
+  Shapes,
+  Square,
+  Type,
+  WandSparkles,
+  ZoomIn,
+} from 'lucide-react'
 import { ReactFlowInstance } from 'reactflow'
 import { DEMO_USER_ID } from '@/lib/workflow-template'
 import { getWorkflowExecutionOrder } from '@/lib/workflow-graph'
 import { isAINode } from '@/lib/mindmap-runtime'
 import { MindMapCanvas } from '@/components/mindmap/MindMapCanvas'
-import { CompanyComposerPanel } from '@/components/mindmap/CompanyComposerPanel'
 import { CompanyComposerInput, composeCompanyGraph } from '@/components/mindmap/company-composer'
-import { EdgeDetailsPanel } from '@/components/mindmap/EdgeDetailsPanel'
-import { GlobalPanel } from '@/components/mindmap/GlobalPanel'
-import { NodeDetailsPanel } from '@/components/mindmap/NodeDetailsPanel'
-import { Toolbox } from '@/components/mindmap/Toolbox'
-import { WorkerCatalog } from '@/components/mindmap/WorkerCatalog'
+import { LeftSidebar } from '@/components/mindmap/LeftSidebar'
+import { RightSidebar } from '@/components/mindmap/RightSidebar'
 import {
   buildWorkforceBlueprint,
   listWorkforceBlueprints,
@@ -26,23 +37,34 @@ import {
   createMindMapNode,
   NODE_TEMPLATES,
 } from '@/components/mindmap/types'
+import { TOOL_DEFINITIONS } from '@/components/mindmap/tool-registry'
 import { useMindMapDocument } from '@/components/mindmap/hooks/useMindMapDocument'
 import { fetchReliability, runMindMap, validateMindMap } from '@/components/mindmap/services'
 import { NodeRuntimeInfo, WorkflowGlobalDefaults } from '@/types/workflow'
 
 const LOCAL_STORAGE_KEY = 'mind-map-builder-document-v3'
 
+const toolIconMap: Record<MindMapTool, React.ReactNode> = {
+  select: <MousePointer2 className="h-4 w-4" />,
+  box: <Square className="h-4 w-4" />,
+  shape: <Shapes className="h-4 w-4" />,
+  'ai-box': <WandSparkles className="h-4 w-4" />,
+  text: <Type className="h-4 w-4" />,
+  pencil: <Pencil className="h-4 w-4" />,
+  highlighter: <Highlighter className="h-4 w-4" />,
+  eraser: <Eraser className="h-4 w-4" />,
+}
+
 export function MindMapBuilder() {
   const { document, isHydrated, updateDocument, undo, redo, canUndo, canRedo } =
     useMindMapDocument(LOCAL_STORAGE_KEY)
   const [activeTool, setActiveTool] = useState<MindMapTool>('select')
-  const [drawColor, setDrawColor] = useState('#2563EB')
+  const [drawColor, setDrawColor] = useState('#1a1f2e')
   const [drawWidth, setDrawWidth] = useState(2.5)
   const [isCatalogDragging, setIsCatalogDragging] = useState(false)
   const [dragTemplateId, setDragTemplateId] = useState<string | null>(null)
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null)
-  const [globalCollapsed, setGlobalCollapsed] = useState(true)
   const [runInput, setRunInput] = useState('run this map')
   const [runOutput, setRunOutput] = useState('')
   const [isRunning, setIsRunning] = useState(false)
@@ -70,6 +92,7 @@ export function MindMapBuilder() {
     includeCompliance: true,
   })
 
+  /* ── Keyboard shortcuts ── */
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const modifier = event.ctrlKey || event.metaKey
@@ -87,6 +110,7 @@ export function MindMapBuilder() {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [redo, undo])
 
+  /* ── Derived state ── */
   const selectedNode = useMemo(
     () => document.nodes.find((node) => node.id === selectedNodeId) || null,
     [document.nodes, selectedNodeId]
@@ -96,6 +120,7 @@ export function MindMapBuilder() {
     [document.edges, selectedEdgeId]
   )
 
+  /* ── Handlers ── */
   const handleSelectNode = useCallback((nodeId: string | null) => {
     setSelectedNodeId(nodeId)
     if (nodeId) setSelectedEdgeId(null)
@@ -112,12 +137,7 @@ export function MindMapBuilder() {
         (previous) => ({
           ...previous,
           nodes: previous.nodes.map((node) =>
-            node.id === nodeId
-              ? {
-                  ...node,
-                  data: { ...node.data, ...patch },
-                }
-              : node
+            node.id === nodeId ? { ...node, data: { ...node.data, ...patch } } : node
           ),
           updatedAt: new Date().toISOString(),
         }),
@@ -138,10 +158,7 @@ export function MindMapBuilder() {
                   ...node,
                   data: {
                     ...node.data,
-                    aiConfig: {
-                      ...(node.data.aiConfig || {}),
-                      ...patch,
-                    },
+                    aiConfig: { ...(node.data.aiConfig || {}), ...patch },
                   },
                 }
               : node
@@ -204,10 +221,7 @@ export function MindMapBuilder() {
       updateDocument(
         (previous) => ({
           ...previous,
-          globalDefaults: {
-            ...previous.globalDefaults,
-            ...patch,
-          },
+          globalDefaults: { ...previous.globalDefaults, ...patch },
           updatedAt: new Date().toISOString(),
         }),
         { recordHistory: true }
@@ -222,17 +236,18 @@ export function MindMapBuilder() {
       if (!template) return
       const canvasElement = window.document.querySelector('.mind-reactflow') as HTMLElement | null
       const canvasRect = canvasElement?.getBoundingClientRect()
-      const position = flowInstance && canvasRect
-        ? flowInstance.screenToFlowPosition({
-            x: canvasRect.left + canvasRect.width * 0.5,
-            y: canvasRect.top + canvasRect.height * 0.45,
-          })
-        : flowInstance
-        ? flowInstance.screenToFlowPosition({
-            x: window.innerWidth * 0.5,
-            y: window.innerHeight * 0.42,
-          })
-        : { x: 120 + Math.random() * 200, y: 120 + Math.random() * 120 }
+      const position =
+        flowInstance && canvasRect
+          ? flowInstance.screenToFlowPosition({
+              x: canvasRect.left + canvasRect.width * 0.5,
+              y: canvasRect.top + canvasRect.height * 0.45,
+            })
+          : flowInstance
+            ? flowInstance.screenToFlowPosition({
+                x: window.innerWidth * 0.5,
+                y: window.innerHeight * 0.42,
+              })
+            : { x: 120 + Math.random() * 200, y: 120 + Math.random() * 120 }
       updateDocument(
         (previous) => ({
           ...previous,
@@ -264,7 +279,6 @@ export function MindMapBuilder() {
           blueprintId: selectedBlueprintId as 'lean-core' | 'growth-pod' | 'enterprise-grid',
           origin,
         })
-
         updateDocument(
           (previous) => ({
             ...previous,
@@ -274,7 +288,6 @@ export function MindMapBuilder() {
           }),
           { recordHistory: true }
         )
-
         clearCatalogDragState()
         setSelectedNodeId(null)
         setSelectedEdgeId(null)
@@ -295,10 +308,6 @@ export function MindMapBuilder() {
     applyWorkforceBlueprint(true)
   }, [applyWorkforceBlueprint, document.nodes.length])
 
-  const appendWorkforcePack = useCallback(() => {
-    applyWorkforceBlueprint(false)
-  }, [applyWorkforceBlueprint])
-
   const applyCompanyComposition = useCallback(
     (replaceCurrent: boolean) => {
       setIsBuildingBlueprint(true)
@@ -309,11 +318,7 @@ export function MindMapBuilder() {
               y: window.innerHeight * 0.48,
             })
           : { x: 120, y: 120 }
-        const composed = composeCompanyGraph({
-          input: composerInput,
-          origin,
-        })
-
+        const composed = composeCompanyGraph({ input: composerInput, origin })
         updateDocument(
           (previous) => ({
             ...previous,
@@ -344,17 +349,10 @@ export function MindMapBuilder() {
     applyCompanyComposition(true)
   }, [applyCompanyComposition, document.nodes.length])
 
-  const appendComposedCompany = useCallback(() => {
-    applyCompanyComposition(false)
-  }, [applyCompanyComposition])
-
   const runValidation = useCallback(async () => {
     setIsValidating(true)
     try {
-      const workflow = buildWorkflowFromDocument({
-        document,
-        userId: DEMO_USER_ID,
-      })
+      const workflow = buildWorkflowFromDocument({ document, userId: DEMO_USER_ID })
       const payload = await validateMindMap(workflow)
       setValidationSummary(payload.summary)
       setNodeIssuesById(payload.nodeIssues || {})
@@ -379,11 +377,7 @@ export function MindMapBuilder() {
               ...node,
               data: {
                 ...node.data,
-                runtime: {
-                  status: 'idle',
-                  ...(node.data.runtime || {}),
-                  ...runtimePatch,
-                },
+                runtime: { status: 'idle', ...(node.data.runtime || {}), ...runtimePatch },
               },
             }
           }),
@@ -399,11 +393,7 @@ export function MindMapBuilder() {
     setIsRunning(true)
     let runningTimer: number | undefined
     try {
-      const workflow = buildWorkflowFromDocument({
-        document,
-        userId: DEMO_USER_ID,
-      })
-
+      const workflow = buildWorkflowFromDocument({ document, userId: DEMO_USER_ID })
       const orderedNodeIds = getWorkflowExecutionOrder(workflow)
         .filter((node) => isAINode(node))
         .map((node) => node.id)
@@ -424,7 +414,6 @@ export function MindMapBuilder() {
           cursor += 1
         }, 220)
       }
-
       const payload = await runMindMap({
         workflow,
         triggerText: runInput,
@@ -436,33 +425,31 @@ export function MindMapBuilder() {
         payload.memoryTable?.map((row) => ({
           namespace: row.namespace,
           key: row.key,
-          value:
-            typeof row.value === 'string'
-              ? row.value
-              : JSON.stringify(row.value).slice(0, 80),
+          value: typeof row.value === 'string' ? row.value : JSON.stringify(row.value).slice(0, 80),
           updatedAt: row.updatedAt,
         })) || []
       setMemoryRows(rows)
       if (!payload.success && !payload.output) {
         setRunOutput('Run failed with no output.')
       }
-
       const now = new Date().toISOString()
       const resultById = new Map(payload.nodeResults.map((entry) => [entry.nodeId, entry]))
       const runtimePatch: Record<string, Partial<NodeRuntimeInfo>> = {}
-      workflow.nodes.filter((node) => isAINode(node)).forEach((node) => {
-        const result = resultById.get(node.id)
-        if (!result) {
-          runtimePatch[node.id] = { status: 'idle', lastRunAt: now }
-          return
-        }
-        runtimePatch[node.id] = {
-          status: result.success ? 'success' : 'error',
-          lastRunAt: now,
-          lastSummary: result.summary,
-          lastError: result.error,
-        }
-      })
+      workflow.nodes
+        .filter((node) => isAINode(node))
+        .forEach((node) => {
+          const result = resultById.get(node.id)
+          if (!result) {
+            runtimePatch[node.id] = { status: 'idle', lastRunAt: now }
+            return
+          }
+          runtimePatch[node.id] = {
+            status: result.success ? 'success' : 'error',
+            lastRunAt: now,
+            lastSummary: result.summary,
+            lastError: result.error,
+          }
+        })
       applyNodeRuntimePatch(runtimePatch)
     } catch (error) {
       const now = new Date().toISOString()
@@ -473,11 +460,7 @@ export function MindMapBuilder() {
             .filter((node) => node.data.nodeKind === 'ai')
             .map((node) => [
               node.id,
-              {
-                status: 'error',
-                lastRunAt: now,
-                lastError: errorMessage,
-              } satisfies Partial<NodeRuntimeInfo>,
+              { status: 'error', lastRunAt: now, lastError: errorMessage } satisfies Partial<NodeRuntimeInfo>,
             ])
         )
       )
@@ -493,18 +476,12 @@ export function MindMapBuilder() {
     const cycleOutputs: string[] = []
     try {
       for (let cycle = 1; cycle <= 3; cycle += 1) {
-        const workflow = buildWorkflowFromDocument({
-          document,
-          userId: DEMO_USER_ID,
-        })
+        const workflow = buildWorkflowFromDocument({ document, userId: DEMO_USER_ID })
         const triggerText = `${runInput} (autopilot cycle ${cycle})`
-        const payload = await runMindMap({
-          workflow,
-          triggerText,
-          userId: DEMO_USER_ID,
-          sessionId,
-        })
-        cycleOutputs.push(`Cycle ${cycle}: ${payload.success ? 'ok' : 'failed'}\n${payload.output || '(no output)'}`)
+        const payload = await runMindMap({ workflow, triggerText, userId: DEMO_USER_ID, sessionId })
+        cycleOutputs.push(
+          `Cycle ${cycle}: ${payload.success ? 'ok' : 'failed'}\n${payload.output || '(no output)'}`
+        )
       }
       setRunOutput(cycleOutputs.join('\n\n'))
     } catch (error) {
@@ -529,21 +506,13 @@ export function MindMapBuilder() {
       )
     } catch {
       setReliabilityStatus('offline')
-      setReliabilityChecks([
-        {
-          name: 'runtime',
-          status: 'error',
-          message: 'health endpoint unavailable',
-        },
-      ])
+      setReliabilityChecks([{ name: 'runtime', status: 'error', message: 'health endpoint unavailable' }])
     }
   }, [])
 
   useEffect(() => {
     if (!isHydrated) return
-    const timeout = window.setTimeout(() => {
-      void runValidation()
-    }, 350)
+    const timeout = window.setTimeout(() => void runValidation(), 350)
     return () => window.clearTimeout(timeout)
   }, [document, isHydrated, runValidation])
 
@@ -588,103 +557,76 @@ export function MindMapBuilder() {
     flowInstance?.fitView({ padding: 0.25, duration: 300 })
   }, [flowInstance])
 
+  /* ═══════════════════════════════════════════════════════
+     RENDER -- Full-height 3-panel layout
+     ═══════════════════════════════════════════════════════ */
+
   return (
-    <main className="mx-auto flex w-full max-w-[1700px] flex-col gap-3 px-3 py-3 sm:px-4 sm:py-4">
-      <header className="mind-surface-panel flex flex-wrap items-center justify-between gap-3 rounded-xl px-4 py-3">
-        <div>
-          <h1 className="text-lg font-semibold text-[#13223A] sm:text-xl">Mind Map Builder</h1>
-          <p className="text-xs text-[#5A6B83]">
-            Draw, connect, annotate, and configure AI boxes directly on the map.
-          </p>
-        </div>
+    <main className="flex h-screen flex-col overflow-hidden bg-[var(--mind-bg)]">
+      {/* ── Top Bar ── */}
+      <header className="flex items-center justify-between border-b border-[var(--mind-border)] bg-[var(--mind-surface)] px-4 py-2">
+        {/* Left: Title + Tools */}
+        <div className="flex items-center gap-1">
+          <h1 className="mr-3 text-sm font-bold text-[var(--mind-text)]">Autonomous Workforce</h1>
 
-        <div className="flex items-center gap-2">
-          <select
-            value={selectedBlueprintId}
-            onChange={(event) => setSelectedBlueprintId(event.target.value)}
-            className="mind-input-field h-9 rounded-md px-2 text-sm outline-none"
-          >
-            {blueprintOptions.map((option) => (
-              <option key={option.id} value={option.id}>
-                {option.title}
-              </option>
+          {/* Tool buttons */}
+          <div className="flex items-center gap-0.5 rounded-lg border border-[var(--mind-border)] bg-[var(--mind-bg-accent)] p-0.5">
+            {TOOL_DEFINITIONS.map((tool) => (
+              <button
+                key={tool.id}
+                type="button"
+                title={tool.label}
+                onClick={() => setActiveTool(tool.id)}
+                className={[
+                  'mind-tool-button inline-flex h-8 w-8 items-center justify-center rounded-md text-[var(--mind-text)]',
+                  activeTool === tool.id ? 'mind-tool-button--active' : '',
+                ]
+                  .join(' ')
+                  .trim()}
+              >
+                {toolIconMap[tool.id]}
+              </button>
             ))}
-          </select>
-          <button
-            type="button"
-            onClick={buildNewWorkforceMap}
-            disabled={isBuildingBlueprint}
-            className="mind-tool-button inline-flex h-9 items-center gap-1 rounded-md px-3 text-sm disabled:opacity-60"
-          >
-            Build Workforce
-          </button>
-          <button
-            type="button"
-            onClick={appendWorkforcePack}
-            disabled={isBuildingBlueprint}
-            className="mind-tool-button inline-flex h-9 items-center gap-1 rounded-md px-3 text-sm disabled:opacity-60"
-          >
-            Add Workforce Pack
-          </button>
-          <input
-            value={runInput}
-            onChange={(event) => setRunInput(event.target.value)}
-            placeholder="run input"
-            className="mind-input-field h-9 w-[220px] rounded-md px-2 text-sm outline-none"
-          />
-          <button
-            type="button"
-            onClick={() => void runValidation()}
-            disabled={isValidating}
-            className="mind-tool-button inline-flex h-9 items-center gap-1 rounded-md px-3 text-sm disabled:opacity-60"
-          >
-            <RefreshCw className={`h-4 w-4 ${isValidating ? 'animate-spin' : ''}`} />
-            Validate
-          </button>
-          <button
-            type="button"
-            onClick={() => void runMap()}
-            disabled={isRunning}
-            className="inline-flex h-9 items-center gap-1 rounded-md bg-[#45658D] px-3 text-sm font-medium text-white hover:bg-[#3A5679] disabled:opacity-60"
-          >
-            <Play className="h-4 w-4" />
-            Run
-          </button>
-          <button
-            type="button"
-            onClick={() => void runAutopilotCycles()}
-            disabled={isRunning}
-            className="mind-tool-button inline-flex h-9 items-center gap-1 rounded-md px-3 text-sm disabled:opacity-60"
-          >
-            Run Autopilot x3
-          </button>
-          <div className="inline-flex h-9 items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 text-xs text-emerald-700">
-            <Save className="h-3.5 w-3.5" />
-            Auto-saved
           </div>
-        </div>
-      </header>
 
-      <section className="grid min-h-[760px] grid-cols-1 gap-3 xl:grid-cols-[300px_minmax(0,1fr)_380px]">
-        <div className="space-y-3">
-          <Toolbox
-            activeTool={activeTool}
-            onSelectTool={setActiveTool}
-            onUndo={undo}
-            onRedo={redo}
-            onFitView={fitView}
-            canUndo={canUndo}
-            canRedo={canRedo}
-          />
+          {/* Undo/Redo */}
+          <div className="ml-1 flex items-center gap-0.5">
+            <button
+              type="button"
+              title="Undo"
+              onClick={undo}
+              disabled={!canUndo}
+              className="mind-tool-button inline-flex h-8 w-8 items-center justify-center rounded-md disabled:opacity-30"
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+            </button>
+            <button
+              type="button"
+              title="Redo"
+              onClick={redo}
+              disabled={!canRedo}
+              className="mind-tool-button inline-flex h-8 w-8 items-center justify-center rounded-md disabled:opacity-30"
+            >
+              <Redo2 className="h-3.5 w-3.5" />
+            </button>
+            <button
+              type="button"
+              title="Fit View"
+              onClick={fitView}
+              className="mind-tool-button inline-flex h-8 w-8 items-center justify-center rounded-md"
+            >
+              <ZoomIn className="h-3.5 w-3.5" />
+            </button>
+          </div>
 
-          <div className="mind-surface-panel rounded-xl p-3">
-            <p className="text-xs font-semibold text-slate-700">Drawing</p>
-            <div className="mt-2 flex items-center gap-2">
+          {/* Drawing settings (visible when draw tool active) */}
+          {(activeTool === 'pencil' || activeTool === 'highlighter') && (
+            <div className="ml-2 flex items-center gap-2 border-l border-[var(--mind-border)] pl-2">
               <input
                 type="color"
                 value={drawColor}
-                onChange={(event) => setDrawColor(event.target.value)}
-                className="h-8 w-10 rounded border border-slate-200 bg-white"
+                onChange={(e) => setDrawColor(e.target.value)}
+                className="h-7 w-8 rounded border border-[var(--mind-border)] bg-[var(--mind-surface)]"
               />
               <input
                 type="number"
@@ -692,81 +634,106 @@ export function MindMapBuilder() {
                 max={8}
                 step={0.5}
                 value={drawWidth}
-                onChange={(event) => setDrawWidth(Math.max(1, Math.min(8, Number(event.target.value) || 2)))}
-                className="mind-input-field h-8 w-20 rounded px-2 text-sm outline-none"
+                onChange={(e) => setDrawWidth(Math.max(1, Math.min(8, Number(e.target.value) || 2)))}
+                className="mind-input-field h-7 w-14 rounded-md px-2 text-xs"
               />
-              <span className="text-xs text-slate-500">px</span>
+              <span className="text-[10px] text-[var(--mind-text-muted)]">px</span>
             </div>
-          </div>
+          )}
+        </div>
 
-          <WorkerCatalog
+        {/* Right: Actions */}
+        <div className="flex items-center gap-2">
+          <input
+            value={runInput}
+            onChange={(e) => setRunInput(e.target.value)}
+            placeholder="Run input..."
+            className="mind-input-field h-8 w-44 rounded-lg px-3 text-xs"
+          />
+
+          <button
+            type="button"
+            onClick={() => void runValidation()}
+            disabled={isValidating}
+            className="mind-tool-button inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-xs font-medium disabled:opacity-50"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${isValidating ? 'animate-spin' : ''}`} />
+            Validate
+          </button>
+
+          <button
+            type="button"
+            onClick={() => void runMap()}
+            disabled={isRunning}
+            className="btn-primary-rainbow inline-flex h-8 items-center gap-1.5 rounded-lg px-4 text-xs font-semibold disabled:opacity-50"
+          >
+            <Play className="h-3.5 w-3.5" />
+            Run
+          </button>
+
+          <button
+            type="button"
+            onClick={() => void runAutopilotCycles()}
+            disabled={isRunning}
+            className="mind-tool-button inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-xs font-medium disabled:opacity-50"
+          >
+            Autopilot
+          </button>
+
+          <div className="flex items-center gap-1 rounded-lg border border-[var(--mind-border)] bg-[var(--mind-bg-accent)] px-2 py-1">
+            <Save className="h-3 w-3 text-[var(--mind-text-muted)]" />
+            <span className="text-[10px] text-[var(--mind-text-muted)]">Saved</span>
+          </div>
+        </div>
+      </header>
+
+      {/* ── 3-Panel Body ── */}
+      <div className="flex flex-1 overflow-hidden">
+        {/* Left Sidebar */}
+        <div className="w-72 shrink-0">
+          <LeftSidebar
             onAddTemplate={addTemplateNodeNearCenter}
             onDragStateChange={setIsCatalogDragging}
             onDragTemplateChange={setDragTemplateId}
-          />
-
-          <CompanyComposerPanel
-            value={composerInput}
-            onChange={setComposerInput}
-            onBuildReplace={buildComposedCompany}
-            onBuildAppend={appendComposedCompany}
-            isBusy={isBuildingBlueprint}
-          />
-        </div>
-
-        <MindMapCanvas
-          document={document}
-          activeTool={activeTool}
-          drawColor={drawColor}
-          drawWidth={drawWidth}
-          externalDragActive={isCatalogDragging}
-          externalDragTemplateId={dragTemplateId}
-          onExternalDropComplete={clearCatalogDragState}
-          onSelectNode={handleSelectNode}
-          onSelectEdge={handleSelectEdge}
-          onUpdateDocument={updateDocument}
-          onFlowReady={setFlowInstance}
-        />
-
-        <div className="grid grid-rows-[minmax(0,1fr)_auto_auto] gap-3">
-          {selectedEdge && !selectedNode ? (
-            <EdgeDetailsPanel
-              selectedEdge={selectedEdge}
-              onPatchEdge={patchEdge}
-              onDeleteEdge={deleteEdge}
-            />
-          ) : (
-            <NodeDetailsPanel
-              selectedNode={selectedNode}
-              globalDefaults={document.globalDefaults}
-              issues={selectedNode ? nodeIssuesById[selectedNode.id] || [] : []}
-              onPatchNode={patchNode}
-              onPatchAIConfig={patchAIConfig}
-              onDeleteNode={deleteNode}
-            />
-          )}
-
-          <GlobalPanel
-            collapsed={globalCollapsed}
-            onToggle={() => setGlobalCollapsed((value) => !value)}
-            defaults={document.globalDefaults}
+            globalDefaults={document.globalDefaults}
             onPatchDefaults={patchDefaults}
             onBulkOverwriteNodes={bulkOverwriteFromDefaults}
-            validationSummary={validationSummary}
-            reliabilityStatus={reliabilityStatus}
-            reliabilityChecks={reliabilityChecks}
-            onRefreshReliability={() => void refreshReliability()}
-            memoryRows={memoryRows}
           />
-
-          <section className="mind-surface-panel rounded-xl p-3">
-            <h3 className="text-xs font-semibold text-slate-700">Run Output</h3>
-            <pre className="mt-2 max-h-52 overflow-auto whitespace-pre-wrap text-xs text-slate-700">
-              {runOutput || 'Run the map to see execution output here.'}
-            </pre>
-          </section>
         </div>
-      </section>
+
+        {/* Canvas (grows to fill) */}
+        <div className="flex-1 overflow-hidden">
+          <MindMapCanvas
+            document={document}
+            activeTool={activeTool}
+            drawColor={drawColor}
+            drawWidth={drawWidth}
+            externalDragActive={isCatalogDragging}
+            externalDragTemplateId={dragTemplateId}
+            onExternalDropComplete={clearCatalogDragState}
+            onSelectNode={handleSelectNode}
+            onSelectEdge={handleSelectEdge}
+            onUpdateDocument={updateDocument}
+            onFlowReady={setFlowInstance}
+          />
+        </div>
+
+        {/* Right Sidebar */}
+        <div className="w-80 shrink-0">
+          <RightSidebar
+            selectedNode={selectedNode}
+            selectedEdge={selectedEdge}
+            globalDefaults={document.globalDefaults}
+            issues={selectedNode ? nodeIssuesById[selectedNode.id] || [] : []}
+            runOutput={runOutput}
+            onPatchNode={patchNode}
+            onPatchAIConfig={patchAIConfig}
+            onDeleteNode={deleteNode}
+            onPatchEdge={patchEdge}
+            onDeleteEdge={deleteEdge}
+          />
+        </div>
+      </div>
     </main>
   )
 }
