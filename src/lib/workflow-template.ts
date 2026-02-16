@@ -12,6 +12,21 @@ export const defaultAISettings: UserAISettings = {
   tonePreset: 'luxury-brand',
 }
 
+export function createOwnerStructureTemplate(userId: string = DEMO_USER_ID): Workflow {
+  const now = new Date().toISOString()
+  return {
+    id: 'workflow-owner-structure',
+    userId,
+    name: 'Owner Employee Structure',
+    description:
+      'Start from an empty schematic map. Drag workers from the left, connect with prompts, then run.',
+    createdAt: now,
+    updatedAt: now,
+    nodes: [],
+    edges: [],
+  }
+}
+
 export function createWebDesignFactoryTemplate(userId: string = DEMO_USER_ID): Workflow {
   const now = new Date().toISOString()
 

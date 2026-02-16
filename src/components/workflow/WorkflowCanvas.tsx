@@ -32,16 +32,22 @@ import {
   BadgeDollarSign,
   BarChart3,
   BriefcaseBusiness,
+  ChevronDown,
+  ChevronUp,
   Calculator,
   Code2,
   Database,
   FileSpreadsheet,
   Handshake,
   Headset,
+  KanbanSquare,
   Loader2,
+  MessageSquare,
   Megaphone,
   Palette,
+  PanelsTopLeft,
   PlusCircle,
+  Settings2,
   Save,
   Scale,
   Send,
@@ -69,6 +75,7 @@ import {
   EdgeDataType,
   MemoryRecord,
   NodeRole,
+  UserAISettings,
   Workflow,
   WorkflowCommunicationEvent,
   WorkflowEdge,
@@ -142,11 +149,20 @@ interface SystemHealthResponse {
   generatedAt: string
 }
 
+type OwnerPanelMode = 'prompts' | 'todo' | 'output' | 'inspect'
+
+interface SettingsResponse {
+  settings?: UserAISettings
+}
+
 const edgePalette: Record<EdgeDataType, string> = {
   api: '#2563EB',
   code: '#059669',
   ai: '#7C3AED',
 }
+
+const inHandleClass = '!bg-[#0F172A] !h-3 !w-3 !border-2 !border-white'
+const outHandleClass = '!bg-[#DC2626] !h-3 !w-3 !border-2 !border-white'
 
 const libraryItems: LibraryItem[] = [
   {
@@ -423,12 +439,12 @@ function NodeShell({
 function ManagerNode({ id, data, selected }: NodeProps<FlowNodeData>) {
   return (
     <NodeShell title={data.label} subtitle={data.workerType || 'Manager Node'} selected={selected}>
-      <Handle type="target" position={Position.Left} className="!bg-[#F59E0B]" />
+      <Handle type="target" position={Position.Left} className={inHandleClass} />
       <p className="mb-2 text-xs text-[#1F2937]">{data.prompt}</p>
       <div className="rounded-lg border border-[#FCD34D]/50 bg-[#FFFBEB] p-2 text-[11px] text-[#92400E]">
         Controls strategy, budgets, priorities, and cross-team escalation.
       </div>
-      <Handle type="source" position={Position.Right} className="!bg-[#F59E0B]" />
+      <Handle type="source" position={Position.Right} className={outHandleClass} />
     </NodeShell>
   )
 }
@@ -436,12 +452,12 @@ function ManagerNode({ id, data, selected }: NodeProps<FlowNodeData>) {
 function ProgrammerNode({ id, data, selected }: NodeProps<FlowNodeData>) {
   return (
     <NodeShell title={data.label} subtitle={data.workerType || 'Programmer Node'} selected={selected}>
-      <Handle type="target" position={Position.Left} className="!bg-[#7C3AED]" />
+      <Handle type="target" position={Position.Left} className={inHandleClass} />
       <p className="mb-2 text-xs text-[#1F2937]">{data.prompt}</p>
       <div className="rounded-lg border border-[#C4B5FD]/60 bg-[#F5F3FF] p-2 text-[11px] text-[#5B21B6]">
         Handles logic, content generation, and process automation orchestration.
       </div>
-      <Handle type="source" position={Position.Right} className="!bg-[#7C3AED]" />
+      <Handle type="source" position={Position.Right} className={outHandleClass} />
     </NodeShell>
   )
 }
@@ -449,7 +465,7 @@ function ProgrammerNode({ id, data, selected }: NodeProps<FlowNodeData>) {
 function CodeNode({ id, data, selected }: NodeProps<FlowNodeData>) {
   return (
     <NodeShell title={data.label} subtitle={data.workerType || 'Function Node'} selected={selected}>
-      <Handle type="target" position={Position.Left} className="!bg-[#2563EB]" />
+      <Handle type="target" position={Position.Left} className={inHandleClass} />
       <CodeBlock
         userId={data.userId}
         workflowId={data.workflowId}
@@ -472,7 +488,7 @@ function CodeNode({ id, data, selected }: NodeProps<FlowNodeData>) {
         }
         onStatusChange={(status) => data.onPatchNode(id, status)}
       />
-      <Handle type="source" position={Position.Right} className="!bg-[#2563EB]" />
+      <Handle type="source" position={Position.Right} className={outHandleClass} />
     </NodeShell>
   )
 }
@@ -539,6 +555,8 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
   const [loading, setLoading] = useState(true)
   const [workflows, setWorkflows] = useState<Workflow[]>([])
   const [activeWorkflowId, setActiveWorkflowId] = useState('')
+  const [ownerPanelMode, setOwnerPanelMode] = useState<OwnerPanelMode>('prompts')
+  const [showAdvancedMenu, setShowAdvancedMenu] = useState(false)
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
   const [collapsedNodeIds, setCollapsedNodeIds] = useState<string[]>([])
   const [librarySearch, setLibrarySearch] = useState('')
@@ -551,7 +569,13 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
   )
   const [customWorkerRole, setCustomWorkerRole] = useState<NodeRole>('programmer')
   const [customCapabilitiesText, setCustomCapabilitiesText] = useState('custom-task')
-  const [runInput, setRunInput] = useState('run workflow-web-design-factory')
+  const [runInput, setRunInput] = useState('run current board')
+  const [globalPromptDraft, setGlobalPromptDraft] = useState('')
+  const [promptProfileTitle, setPromptProfileTitle] = useState('Owner Direction')
+  const [ownerTodoText, setOwnerTodoText] = useState('')
+  const [ownerAsyncNote, setOwnerAsyncNote] = useState('')
+  const [isLoadingPrompts, setIsLoadingPrompts] = useState(false)
+  const [isSavingPrompts, setIsSavingPrompts] = useState(false)
   const [runOutput, setRunOutput] = useState('')
   const [auditRows, setAuditRows] = useState<
     Array<{ id: string; action: string; createdAt: string; payload: Record<string, unknown> }>
@@ -858,6 +882,108 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
     }
   }, [userId])
 
+  const fetchOwnerPrompts = useCallback(async () => {
+    setIsLoadingPrompts(true)
+    try {
+      const response = await fetch(`/api/settings?userId=${encodeURIComponent(userId)}`)
+      if (!response.ok) {
+        throw new Error(`Failed to load prompt settings (${response.status})`)
+      }
+      const data = (await response.json()) as SettingsResponse
+      const settings = data.settings
+      setGlobalPromptDraft(
+        settings?.globalPrompt || 'Define company objective and execution standards here.'
+      )
+    } catch {
+      setGlobalPromptDraft('Define company objective and execution standards here.')
+    } finally {
+      setIsLoadingPrompts(false)
+    }
+  }, [userId])
+
+  const saveOwnerPrompts = useCallback(async () => {
+    setIsSavingPrompts(true)
+    try {
+      const response = await fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId,
+          globalPrompt: globalPromptDraft.trim(),
+        }),
+      })
+      const data = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        throw new Error(data?.message || `Failed to save prompts (${response.status})`)
+      }
+      pushToast('Prompt profile saved.', 'success')
+    } catch (error) {
+      pushToast(error instanceof Error ? error.message : 'Failed to save prompts.', 'error')
+    } finally {
+      setIsSavingPrompts(false)
+    }
+  }, [globalPromptDraft, pushToast, userId])
+
+  const applyPromptToAllWorkers = useCallback(() => {
+    const globalPrompt = globalPromptDraft.trim()
+    if (!globalPrompt) {
+      pushToast('Write a global prompt first.', 'error')
+      return
+    }
+    setNodes((prev) =>
+      prev.map((node) => {
+        if (node.data.role === 'code') return node
+        const existing = node.data.prompt || ''
+        const withoutHeader = existing.includes('\n---\n')
+          ? existing.split('\n---\n').slice(1).join('\n---\n')
+          : existing
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            prompt: `${promptProfileTitle.trim() || 'Owner Direction'}:\n${globalPrompt}\n---\n${withoutHeader}`.trim(),
+          },
+        }
+      })
+    )
+    setIsDirty(true)
+    pushToast('Global direction applied to all AI workers.', 'success')
+  }, [globalPromptDraft, promptProfileTitle, pushToast, setNodes])
+
+  const saveOwnerNotes = useCallback(async () => {
+    if (!activeWorkflowId) return
+    try {
+      await Promise.all([
+        fetch('/api/memory', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId,
+            workflowId: activeWorkflowId,
+            namespace: 'owner',
+            key: 'todo',
+            value: ownerTodoText,
+          }),
+        }),
+        fetch('/api/memory', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            userId,
+            workflowId: activeWorkflowId,
+            namespace: 'owner',
+            key: 'async_manager_notes',
+            value: ownerAsyncNote,
+          }),
+        }),
+      ])
+      pushToast('Owner todo/async notes saved.', 'success')
+      await fetchMemory()
+    } catch (error) {
+      pushToast(error instanceof Error ? error.message : 'Failed to save owner notes.', 'error')
+    }
+  }, [activeWorkflowId, fetchMemory, ownerAsyncNote, ownerTodoText, pushToast, userId])
+
   const saveMemoryRecord = useCallback(async () => {
     if (!activeWorkflowId) return
     const key = memoryKey.trim()
@@ -947,6 +1073,21 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
   }, [fetchMemory])
 
   useEffect(() => {
+    const todoRecord = memoryRecords.find(
+      (record) => record.namespace === 'owner' && record.key === 'todo'
+    )
+    const asyncRecord = memoryRecords.find(
+      (record) => record.namespace === 'owner' && record.key === 'async_manager_notes'
+    )
+    if (todoRecord && typeof todoRecord.value === 'string') {
+      setOwnerTodoText(todoRecord.value)
+    }
+    if (asyncRecord && typeof asyncRecord.value === 'string') {
+      setOwnerAsyncNote(asyncRecord.value)
+    }
+  }, [memoryRecords])
+
+  useEffect(() => {
     if (!activeWorkflowId) return
     void validateActiveWorkflow(false)
   }, [activeWorkflowId, validateActiveWorkflow])
@@ -955,6 +1096,23 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
     if (!activeWorkflowId) return
     void fetchSystemHealth()
   }, [activeWorkflowId, fetchSystemHealth])
+
+  useEffect(() => {
+    void fetchOwnerPrompts()
+  }, [fetchOwnerPrompts])
+
+  useEffect(() => {
+    if (!activeWorkflowId) {
+      setRunInput('run current board')
+      return
+    }
+    setRunInput((prev) => {
+      if (!prev || prev === 'run current board' || prev.startsWith('run workflow-')) {
+        return `run ${activeWorkflowId}`
+      }
+      return prev
+    })
+  }, [activeWorkflowId])
 
   const applyMindMapLayout = useCallback(
     (rootId?: string) => {
@@ -1466,6 +1624,16 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
     pushToast(`Signal storm launched: ${events.length} pulses.`, 'success')
   }, [edges, playCommunicationSignals, pushToast])
 
+  const clearBoardToEmpty = useCallback(() => {
+    setNodes([])
+    setEdges([])
+    setSelectedNodeId(null)
+    setCollapsedNodeIds([])
+    setIsDirty(true)
+    setRunOutput('Board cleared. Drag AI workers from the left to start.')
+    pushToast('Board reset to empty schematic map.', 'success')
+  }, [pushToast, setEdges, setNodes])
+
   useEffect(() => {
     if (!autosaveEnabled || !isDirty || !activeWorkflow || isSaving) return
     const timer = setTimeout(() => {
@@ -1556,23 +1724,18 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
       <div className="space-y-4">
         <section className="rgb-glow-card rounded-2xl p-3">
           <div className="flex flex-wrap items-center gap-2">
-            <div className="mr-3 flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-xs font-semibold text-[#1D4ED8] shadow-sm">
-              <Target className="h-4 w-4" />
-              CEO Command Board
+            <div className="mr-2 flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-xs font-semibold text-[#1D4ED8] shadow-sm">
+              <PanelsTopLeft className="h-4 w-4" />
+              Owner Structure Map
             </div>
 
             <div className="rounded-lg border border-[#CBD5E1] bg-white px-2 py-1 text-[11px] text-[#334155]">
-              {isDirty ? 'Unsaved changes' : 'Synced'}
+              {isDirty ? 'Unsaved' : 'Synced'}
               {lastSavedAt ? ` • ${new Date(lastSavedAt).toLocaleTimeString()}` : ''}
             </div>
 
             <div className="rounded-lg border border-[#FCD34D] bg-[#FFFBEB] px-2 py-1 text-[11px] text-[#92400E]">
-              Signal XP: {signalScore}
-            </div>
-
-            <div className="rounded-lg border border-[#BFDBFE] bg-[#EFF6FF] px-2 py-1 text-[11px] text-[#1D4ED8]">
-              {activeSignalCount > 0 ? `Pulse Burst: ${activeSignalCount}` : 'Comms Idle'}
-              {lastSignalAt ? ` • ${new Date(lastSignalAt).toLocaleTimeString()}` : ''}
+              Signal XP {signalScore}
             </div>
 
             <div
@@ -1584,9 +1747,7 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
                   : 'border border-slate-200 bg-slate-50 text-slate-600'
               }`}
             >
-              {validationReport
-                ? `Validation ${validationReport.score}/100 · E${validationReport.summary.errors} W${validationReport.summary.warnings}`
-                : 'Validation pending'}
+              {validationReport ? `Ready ${validationReport.score}/100` : 'Ready check pending'}
             </div>
 
             <div
@@ -1598,57 +1759,22 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
                   : 'border border-red-200 bg-red-50 text-red-700'
               }`}
             >
-              System: {isHealthLoading ? 'Checking...' : systemHealthStatus}
+              System {isHealthLoading ? '...' : systemHealthStatus}
             </div>
-
-            <label className="inline-flex items-center gap-1 rounded-lg border border-[#CBD5E1] bg-white px-2 py-1 text-[11px] text-[#334155]">
-              Autosave
-              <input
-                type="checkbox"
-                checked={autosaveEnabled}
-                onChange={(event) => setAutosaveEnabled(event.target.checked)}
-              />
-            </label>
-
-            <label className="text-xs font-medium text-[#334155]">Connection Type</label>
-            <select
-              value={connectType}
-              onChange={(event) => setConnectType(event.target.value as EdgeDataType)}
-              className="h-9 rounded-lg border border-[#CBD5E1] bg-white px-2 text-xs text-[#0F172A]"
-            >
-              <option value="ai">AI</option>
-              <option value="api">API</option>
-              <option value="code">Code</option>
-            </select>
 
             <Input
               value={runInput}
               onChange={(event) => setRunInput(event.target.value)}
-              className="min-w-[260px] flex-1 border-[#CBD5E1] bg-white text-xs text-[#0F172A]"
-              placeholder="Type execution command..."
+              className="min-w-[240px] flex-1 border-[#CBD5E1] bg-white text-xs text-[#0F172A]"
+              placeholder="Run command for this board..."
             />
 
-            <Button className="h-9 bg-[#2563EB] text-white hover:bg-[#1D4ED8]" onClick={fitView}>
-              Fit
-            </Button>
-            <Button className="h-9 bg-[#1E293B] text-white hover:bg-[#0F172A]" onClick={zoomIn}>
-              <ZoomIn className="mr-1 h-4 w-4" />
-              Zoom
-            </Button>
-            <Button className="h-9 bg-[#1E293B] text-white hover:bg-[#0F172A]" onClick={zoomOut}>
-              <ZoomOut className="mr-1 h-4 w-4" />
-              Out
-            </Button>
             <Button
               className="h-9 bg-[#4F46E5] text-white hover:bg-[#4338CA]"
               onClick={saveWorkflow}
               disabled={isSaving}
             >
-              {isSaving ? (
-                <Loader2 className="mr-1 h-4 w-4 animate-spin" />
-              ) : (
-                <Save className="mr-1 h-4 w-4" />
-              )}
+              {isSaving ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Save className="mr-1 h-4 w-4" />}
               Save
             </Button>
             <Button
@@ -1656,62 +1782,135 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
               onClick={runWorkflow}
               disabled={isRunning}
             >
-              {isRunning ? (
-                <Loader2 className="mr-1 h-4 w-4 animate-spin" />
-              ) : (
-                <Send className="mr-1 h-4 w-4" />
-              )}
+              {isRunning ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Send className="mr-1 h-4 w-4" />}
               Run
             </Button>
             <Button
-              className="h-9 bg-[#0F766E] text-white hover:bg-[#115E59]"
-              onClick={() => void validateActiveWorkflow(false)}
-              disabled={isValidating}
+              className={`h-9 ${ownerPanelMode === 'prompts' ? 'bg-[#1D4ED8]' : 'bg-white text-[#1E293B]'} hover:bg-[#1E40AF] hover:text-white`}
+              onClick={() => setOwnerPanelMode('prompts')}
             >
-              {isValidating ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : null}
-              Validate
+              <MessageSquare className="mr-1 h-4 w-4" />
+              Prompt
             </Button>
             <Button
-              className="h-9 bg-[#7C2D12] text-white hover:bg-[#9A3412]"
-              onClick={() => void validateActiveWorkflow(true)}
-              disabled={isValidating}
+              className={`h-9 ${ownerPanelMode === 'inspect' ? 'bg-[#7C3AED]' : 'bg-white text-[#1E293B]'} hover:bg-[#6D28D9] hover:text-white`}
+              onClick={() => setOwnerPanelMode('inspect')}
             >
-              Auto-Repair
+              <Code2 className="mr-1 h-4 w-4" />
+              Code
             </Button>
             <Button
-              className="h-9 bg-[#DB2777] text-white hover:bg-[#BE185D]"
-              onClick={simulateSignalStorm}
+              className={`h-9 ${ownerPanelMode === 'todo' ? 'bg-[#0F766E]' : 'bg-white text-[#1E293B]'} hover:bg-[#115E59] hover:text-white`}
+              onClick={() => setOwnerPanelMode('todo')}
             >
-              Storm
+              <KanbanSquare className="mr-1 h-4 w-4" />
+              Todo
             </Button>
             <Button
-              className="h-9 bg-[#1E293B] text-white hover:bg-[#0F172A]"
-              onClick={replayLastSignals}
-              disabled={lastRunCommunications.length === 0}
+              className={`h-9 ${ownerPanelMode === 'output' ? 'bg-[#334155]' : 'bg-white text-[#1E293B]'} hover:bg-[#1E293B] hover:text-white`}
+              onClick={() => setOwnerPanelMode('output')}
             >
-              Replay Pulse
+              Output
+            </Button>
+            <Button
+              className="h-9 bg-white text-[#1E293B] hover:bg-[#F8FAFC]"
+              onClick={clearBoardToEmpty}
+            >
+              New Empty Map
+            </Button>
+            <Button
+              className="h-9 bg-white text-[#1E293B] hover:bg-[#F8FAFC]"
+              onClick={() => setShowAdvancedMenu((prev) => !prev)}
+            >
+              <Settings2 className="mr-1 h-4 w-4" />
+              Advanced
+              {showAdvancedMenu ? <ChevronUp className="ml-1 h-4 w-4" /> : <ChevronDown className="ml-1 h-4 w-4" />}
             </Button>
           </div>
+          {showAdvancedMenu && (
+            <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-[#DBEAFE] pt-3">
+              <label className="inline-flex items-center gap-1 rounded-lg border border-[#CBD5E1] bg-white px-2 py-1 text-[11px] text-[#334155]">
+                Autosave
+                <input
+                  type="checkbox"
+                  checked={autosaveEnabled}
+                  onChange={(event) => setAutosaveEnabled(event.target.checked)}
+                />
+              </label>
+              <label className="text-xs font-medium text-[#334155]">Connection</label>
+              <select
+                value={connectType}
+                onChange={(event) => setConnectType(event.target.value as EdgeDataType)}
+                className="h-8 rounded-lg border border-[#CBD5E1] bg-white px-2 text-xs text-[#0F172A]"
+              >
+                <option value="ai">AI</option>
+                <option value="api">API</option>
+                <option value="code">Code</option>
+              </select>
+              <Button size="sm" className="h-8 bg-[#2563EB] text-white hover:bg-[#1D4ED8]" onClick={fitView}>
+                <Target className="mr-1 h-3.5 w-3.5" />
+                Fit
+              </Button>
+              <Button size="sm" className="h-8 bg-[#1E293B] text-white hover:bg-[#0F172A]" onClick={zoomIn}>
+                <ZoomIn className="mr-1 h-3.5 w-3.5" />
+                In
+              </Button>
+              <Button size="sm" className="h-8 bg-[#1E293B] text-white hover:bg-[#0F172A]" onClick={zoomOut}>
+                <ZoomOut className="mr-1 h-3.5 w-3.5" />
+                Out
+              </Button>
+              <Button
+                size="sm"
+                className="h-8 bg-[#0F766E] text-white hover:bg-[#115E59]"
+                onClick={() => void validateActiveWorkflow(false)}
+                disabled={isValidating}
+              >
+                Validate
+              </Button>
+              <Button
+                size="sm"
+                className="h-8 bg-[#7C2D12] text-white hover:bg-[#9A3412]"
+                onClick={() => void validateActiveWorkflow(true)}
+                disabled={isValidating}
+              >
+                Repair
+              </Button>
+              <Button size="sm" className="h-8 bg-[#DB2777] text-white hover:bg-[#BE185D]" onClick={simulateSignalStorm}>
+                Storm
+              </Button>
+              <Button
+                size="sm"
+                className="h-8 bg-[#334155] text-white hover:bg-[#1E293B]"
+                onClick={replayLastSignals}
+                disabled={lastRunCommunications.length === 0}
+              >
+                Replay
+              </Button>
+            </div>
+          )}
         </section>
 
         <div className="overflow-x-auto pb-2">
           <div className="grid min-w-[1180px] gap-4 lg:grid-cols-[320px_minmax(0,1fr)_320px]">
             <aside className="rgb-glow-card space-y-3 rounded-3xl p-4">
               <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-[#0F172A]">Role + Tool Library</h3>
+                <h3 className="text-sm font-semibold text-[#0F172A]">AI Worker List</h3>
                 <span className="rounded-full bg-[#EEF2FF] px-2 py-0.5 text-[10px] text-[#4338CA]">
-                  {filteredLibrary.length} items
+                  drag & drop
                 </span>
               </div>
+              <p className="rounded-lg border border-[#DBEAFE] bg-[#EFF6FF] px-2 py-1 text-[11px] text-[#1E40AF]">
+                For mobile/PC: tap/hold (or click/hold) a worker and drop it on the map. New block appears only when dropped.
+              </p>
 
               <Input
                 value={librarySearch}
                 onChange={(event) => setLibrarySearch(event.target.value)}
-                placeholder="Search workers/tools/functions..."
+                placeholder="Search worker roles..."
                 className="h-9 border-[#CBD5E1] bg-white text-xs text-[#0F172A]"
               />
 
-              <div className="max-h-[38vh] space-y-2 overflow-auto pr-1">
+              <div className="max-h-[46vh] space-y-2 overflow-auto pr-1">
                 {filteredLibrary.map((item) => {
                   const Icon = item.icon
                   const selected = selectedLibraryId === item.id
@@ -1745,137 +1944,131 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
                 })}
               </div>
 
-              <div className="rounded-2xl border border-[#BFDBFE] bg-[#EFF6FF] p-3">
-                <p className="mb-2 text-xs font-semibold text-[#1D4ED8]">Insert Selected Item</p>
-                <div className="grid grid-cols-3 gap-2">
-                  <Button
-                    size="sm"
-                    className="h-8 bg-white text-[#1E293B] hover:bg-[#F8FAFC]"
-                    onClick={() => addFromLibrary({ mode: 'root' })}
-                  >
-                    Root
-                  </Button>
-                  <Button
-                    size="sm"
-                    disabled={!selectedNodeId}
-                    className="h-8 bg-white text-[#1E293B] hover:bg-[#F8FAFC]"
-                    onClick={() => addFromLibrary({ mode: 'child' })}
-                  >
-                    Child
-                  </Button>
-                  <Button
-                    size="sm"
-                    disabled={!selectedNodeId}
-                    className="h-8 bg-white text-[#1E293B] hover:bg-[#F8FAFC]"
-                    onClick={() => addFromLibrary({ mode: 'sibling' })}
-                  >
-                    Sibling
-                  </Button>
-                </div>
-              </div>
-
-              <div className="rounded-2xl border border-[#C7D2FE] bg-[#EEF2FF] p-3">
-                <p className="mb-2 text-xs font-semibold text-[#312E81]">Custom Role Builder</p>
-                <div className="space-y-2">
-                  <Input
-                    value={customWorkerName}
-                    onChange={(event) => setCustomWorkerName(event.target.value)}
-                    className="h-8 border-[#A5B4FC] bg-white text-xs text-[#0F172A]"
-                    placeholder="Custom role name"
-                  />
-                  <select
-                    value={customWorkerRole}
-                    onChange={(event) =>
-                      setCustomWorkerRole(event.target.value as NodeRole)
-                    }
-                    className="h-8 w-full rounded-lg border border-[#A5B4FC] bg-white px-2 text-xs text-[#0F172A]"
-                  >
-                    <option value="manager">Manager</option>
-                    <option value="programmer">Programmer</option>
-                    <option value="code">Code</option>
-                  </select>
-                  <Input
-                    value={customCapabilitiesText}
-                    onChange={(event) => setCustomCapabilitiesText(event.target.value)}
-                    className="h-8 border-[#A5B4FC] bg-white text-xs text-[#0F172A]"
-                    placeholder="Capabilities comma-separated"
-                  />
-                  <textarea
-                    value={customWorkerPrompt}
-                    onChange={(event) => setCustomWorkerPrompt(event.target.value)}
-                    rows={2}
-                    className="w-full rounded-lg border border-[#A5B4FC] bg-white px-2 py-1 text-xs text-[#0F172A] outline-none"
-                  />
-                  <div className="grid grid-cols-2 gap-2">
-                    <Button
-                      size="sm"
-                      className="h-8 bg-[#2563EB] text-white hover:bg-[#1D4ED8]"
-                      onClick={() =>
-                        addFromLibrary({ mode: 'root', item: buildCustomItem() })
-                      }
-                    >
-                      <PlusCircle className="mr-1 h-3.5 w-3.5" />
-                      Add Root
-                    </Button>
-                    <Button
-                      size="sm"
-                      disabled={!selectedNodeId}
-                      className="h-8 bg-[#4338CA] text-white hover:bg-[#3730A3]"
-                      onClick={() =>
-                        addFromLibrary({ mode: 'child', item: buildCustomItem() })
-                      }
-                    >
-                      Add Child
-                    </Button>
+              {showAdvancedMenu && (
+                <>
+                  <div className="rounded-2xl border border-[#BFDBFE] bg-[#EFF6FF] p-3">
+                    <p className="mb-2 text-xs font-semibold text-[#1D4ED8]">Manual Insert (Advanced)</p>
+                    <div className="grid grid-cols-3 gap-2">
+                      <Button
+                        size="sm"
+                        className="h-8 bg-white text-[#1E293B] hover:bg-[#F8FAFC]"
+                        onClick={() => addFromLibrary({ mode: 'root' })}
+                      >
+                        Root
+                      </Button>
+                      <Button
+                        size="sm"
+                        disabled={!selectedNodeId}
+                        className="h-8 bg-white text-[#1E293B] hover:bg-[#F8FAFC]"
+                        onClick={() => addFromLibrary({ mode: 'child' })}
+                      >
+                        Child
+                      </Button>
+                      <Button
+                        size="sm"
+                        disabled={!selectedNodeId}
+                        className="h-8 bg-white text-[#1E293B] hover:bg-[#F8FAFC]"
+                        onClick={() => addFromLibrary({ mode: 'sibling' })}
+                      >
+                        Sibling
+                      </Button>
+                    </div>
                   </div>
-                </div>
-              </div>
 
-              <div className="rounded-2xl border border-[#E2E8F0] bg-white p-3">
-                <p className="mb-2 text-xs font-semibold text-[#1E293B]">Structure Controls</p>
-                <div className="grid grid-cols-3 gap-2">
-                  <Button
-                    size="sm"
-                    className="h-8 bg-[#2563EB] text-white hover:bg-[#1D4ED8]"
-                    onClick={() => applyMindMapLayout()}
-                  >
-                    Arrange
-                  </Button>
-                  <Button
-                    size="sm"
-                    disabled={!selectedNodeId}
-                    className="h-8 bg-[#7C3AED] text-white hover:bg-[#6D28D9]"
-                    onClick={toggleCollapseSelected}
-                  >
-                    {selectedNodeId && collapsedNodeIds.includes(selectedNodeId)
-                      ? 'Expand'
-                      : 'Collapse'}
-                  </Button>
-                  <Button
-                    size="sm"
-                    disabled={!selectedNodeId}
-                    className="h-8 bg-[#DC2626] text-white hover:bg-[#B91C1C]"
-                    onClick={deleteSelectedBranch}
-                  >
-                    Delete
-                  </Button>
-                </div>
-                <label className="mt-2 flex items-center justify-between text-[11px] text-[#334155]">
-                  Auto-connect dropped nodes
-                  <input
-                    type="checkbox"
-                    checked={autoConnectFromSelection}
-                    onChange={(event) =>
-                      setAutoConnectFromSelection(event.target.checked)
-                    }
-                  />
-                </label>
-              </div>
+                  <div className="rounded-2xl border border-[#C7D2FE] bg-[#EEF2FF] p-3">
+                    <p className="mb-2 text-xs font-semibold text-[#312E81]">Custom Worker (Advanced)</p>
+                    <div className="space-y-2">
+                      <Input
+                        value={customWorkerName}
+                        onChange={(event) => setCustomWorkerName(event.target.value)}
+                        className="h-8 border-[#A5B4FC] bg-white text-xs text-[#0F172A]"
+                        placeholder="Custom role name"
+                      />
+                      <select
+                        value={customWorkerRole}
+                        onChange={(event) => setCustomWorkerRole(event.target.value as NodeRole)}
+                        className="h-8 w-full rounded-lg border border-[#A5B4FC] bg-white px-2 text-xs text-[#0F172A]"
+                      >
+                        <option value="manager">Manager</option>
+                        <option value="programmer">Programmer</option>
+                        <option value="code">Code</option>
+                      </select>
+                      <Input
+                        value={customCapabilitiesText}
+                        onChange={(event) => setCustomCapabilitiesText(event.target.value)}
+                        className="h-8 border-[#A5B4FC] bg-white text-xs text-[#0F172A]"
+                        placeholder="Capabilities comma-separated"
+                      />
+                      <textarea
+                        value={customWorkerPrompt}
+                        onChange={(event) => setCustomWorkerPrompt(event.target.value)}
+                        rows={2}
+                        className="w-full rounded-lg border border-[#A5B4FC] bg-white px-2 py-1 text-xs text-[#0F172A] outline-none"
+                      />
+                      <div className="grid grid-cols-2 gap-2">
+                        <Button
+                          size="sm"
+                          className="h-8 bg-[#2563EB] text-white hover:bg-[#1D4ED8]"
+                          onClick={() => addFromLibrary({ mode: 'root', item: buildCustomItem() })}
+                        >
+                          <PlusCircle className="mr-1 h-3.5 w-3.5" />
+                          Add Root
+                        </Button>
+                        <Button
+                          size="sm"
+                          disabled={!selectedNodeId}
+                          className="h-8 bg-[#4338CA] text-white hover:bg-[#3730A3]"
+                          onClick={() => addFromLibrary({ mode: 'child', item: buildCustomItem() })}
+                        >
+                          Add Child
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-[#E2E8F0] bg-white p-3">
+                    <p className="mb-2 text-xs font-semibold text-[#1E293B]">Structure Controls</p>
+                    <div className="grid grid-cols-3 gap-2">
+                      <Button
+                        size="sm"
+                        className="h-8 bg-[#2563EB] text-white hover:bg-[#1D4ED8]"
+                        onClick={() => applyMindMapLayout()}
+                      >
+                        Arrange
+                      </Button>
+                      <Button
+                        size="sm"
+                        disabled={!selectedNodeId}
+                        className="h-8 bg-[#7C3AED] text-white hover:bg-[#6D28D9]"
+                        onClick={toggleCollapseSelected}
+                      >
+                        {selectedNodeId && collapsedNodeIds.includes(selectedNodeId) ? 'Expand' : 'Collapse'}
+                      </Button>
+                      <Button
+                        size="sm"
+                        disabled={!selectedNodeId}
+                        className="h-8 bg-[#DC2626] text-white hover:bg-[#B91C1C]"
+                        onClick={deleteSelectedBranch}
+                      >
+                        Delete
+                      </Button>
+                    </div>
+                    <label className="mt-2 flex items-center justify-between text-[11px] text-[#334155]">
+                      Auto-connect dropped nodes
+                      <input
+                        type="checkbox"
+                        checked={autoConnectFromSelection}
+                        onChange={(event) => setAutoConnectFromSelection(event.target.checked)}
+                      />
+                    </label>
+                  </div>
+                </>
+              )}
             </aside>
 
             <div
               ref={flowWrapperRef}
-              className="rgb-wave-space relative h-[82vh] overflow-hidden rounded-3xl border border-[#E2E8F0]"
+              className="rgb-wave-space owner-schematic-grid relative h-[82vh] overflow-hidden rounded-3xl border border-[#E2E8F0]"
               onDragOver={onCanvasDragOver}
               onDrop={onCanvasDrop}
             >
@@ -1912,8 +2105,7 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
               </ReactFlow>
 
               <div className="pointer-events-none absolute left-4 top-4 rounded-lg border border-[#BFDBFE] bg-white/90 px-3 py-2 text-[11px] text-[#1E3A8A] shadow">
-                Drag cards from left. Connect handles to build any possible org/tool/function
-                structure.
+                Drag workers from left. Black dot = input, red dot = output. Connect to pass prompts/tasks between teams.
               </div>
 
               <div className="pointer-events-none absolute bottom-4 left-4 rounded-lg border border-[#FDBA74] bg-[#FFF7ED]/90 px-3 py-2 text-[11px] text-[#9A3412] shadow">
@@ -1924,6 +2116,18 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
                     : 'Signal lane waiting for next run'}
                 </span>
               </div>
+
+              {nodes.length === 0 && (
+                <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
+                  <div className="max-w-md rounded-2xl border border-dashed border-[#93C5FD] bg-white/90 px-4 py-3 text-center shadow">
+                    <p className="text-sm font-semibold text-[#1D4ED8]">Empty Schematic Map</p>
+                    <p className="mt-1 text-xs text-[#334155]">
+                      Start by dragging a worker from the left menu into this map area.
+                      The block appears only after drop.
+                    </p>
+                  </div>
+                </div>
+              )}
 
               <div className="absolute right-4 top-4 flex gap-2">
                 <Button
@@ -1953,341 +2157,421 @@ export function WorkflowCanvas({ userId = DEMO_USER_ID }: { userId?: string }) {
             </div>
 
             <aside className="rgb-glow-card space-y-3 rounded-3xl p-4">
-              <div>
-                <h3 className="text-sm font-semibold text-[#0F172A]">Inspector</h3>
-                <p className="text-xs text-[#475569]">
-                  Tune selected node behavior, role, and function scope.
+              <div className="space-y-2">
+                <h3 className="text-sm font-semibold text-[#0F172A]">Owner Control Window</h3>
+                <p className="text-[11px] text-[#475569]">
+                  Keep it simple: use Prompt / Code / Todo. Open Advanced only when needed.
                 </p>
-                <p className="mt-1 text-[10px] text-[#64748B]">
-                  Shortcuts: Ctrl/Cmd+S Save, Ctrl/Cmd+Enter Run, Ctrl/Cmd+D Duplicate, Del Remove, F Fit.
-                </p>
+                <div className="grid grid-cols-4 gap-1">
+                  <Button
+                    size="sm"
+                    className={`h-7 ${ownerPanelMode === 'prompts' ? 'bg-[#1D4ED8]' : 'bg-white text-[#334155]'} hover:bg-[#1E40AF] hover:text-white`}
+                    onClick={() => setOwnerPanelMode('prompts')}
+                  >
+                    Prompt
+                  </Button>
+                  <Button
+                    size="sm"
+                    className={`h-7 ${ownerPanelMode === 'inspect' ? 'bg-[#7C3AED]' : 'bg-white text-[#334155]'} hover:bg-[#6D28D9] hover:text-white`}
+                    onClick={() => setOwnerPanelMode('inspect')}
+                  >
+                    Code
+                  </Button>
+                  <Button
+                    size="sm"
+                    className={`h-7 ${ownerPanelMode === 'todo' ? 'bg-[#0F766E]' : 'bg-white text-[#334155]'} hover:bg-[#115E59] hover:text-white`}
+                    onClick={() => setOwnerPanelMode('todo')}
+                  >
+                    Todo
+                  </Button>
+                  <Button
+                    size="sm"
+                    className={`h-7 ${ownerPanelMode === 'output' ? 'bg-[#334155]' : 'bg-white text-[#334155]'} hover:bg-[#1E293B] hover:text-white`}
+                    onClick={() => setOwnerPanelMode('output')}
+                  >
+                    Output
+                  </Button>
+                </div>
               </div>
 
-              {!selectedNode && (
-                <div className="rounded-xl border border-dashed border-[#CBD5E1] bg-white p-3 text-xs text-[#64748B]">
-                  Select a node on the board to edit its mission, capabilities, and behavior.
-                </div>
-              )}
-
-              {selectedNode && (
-                <div className="space-y-2 rounded-xl border border-[#CBD5E1] bg-white p-3">
-                  <label className="text-[11px] text-[#334155]">Node label</label>
-                  <Input
-                    value={selectedNode.data.label}
-                    onChange={(event) =>
-                      patchNode(selectedNode.id, { label: event.target.value })
-                    }
-                    className="h-8 border-[#CBD5E1] bg-white text-xs text-[#0F172A]"
-                  />
-
-                  <label className="text-[11px] text-[#334155]">Worker type</label>
-                  <Input
-                    value={selectedNode.data.workerType || ''}
-                    onChange={(event) =>
-                      patchNode(selectedNode.id, { workerType: event.target.value })
-                    }
-                    className="h-8 border-[#CBD5E1] bg-white text-xs text-[#0F172A]"
-                  />
-
-                  <label className="text-[11px] text-[#334155]">Role</label>
-                  <select
-                    value={selectedNode.data.role}
-                    onChange={(event) => {
-                      const nextRole = event.target.value as NodeRole
-                      setIsDirty(true)
-                      setNodes((prev) =>
-                        prev.map((node) =>
-                          node.id === selectedNode.id
-                            ? {
-                                ...node,
-                                type: nextRole,
-                                data: {
-                                  ...node.data,
-                                  role: nextRole,
-                                  codeSnippet:
-                                    nextRole === 'code'
-                                      ? node.data.codeSnippet || {
-                                          language: 'typescript',
-                                          content:
-                                            'export const runTask = () => "custom function output";\n',
-                                        }
-                                      : node.data.codeSnippet,
-                                },
-                              }
-                            : node
-                        )
-                      )
-                    }}
-                    className="h-8 w-full rounded-lg border border-[#CBD5E1] bg-white px-2 text-xs text-[#0F172A]"
-                  >
-                    <option value="manager">Manager</option>
-                    <option value="programmer">Programmer</option>
-                    <option value="code">Code</option>
-                  </select>
-
-                  <label className="text-[11px] text-[#334155]">Capabilities (comma)</label>
-                  <Input
-                    value={(selectedNode.data.capabilities || []).join(', ')}
-                    onChange={(event) =>
-                      patchNode(selectedNode.id, {
-                        capabilities: parseCapabilities(event.target.value),
-                      })
-                    }
-                    className="h-8 border-[#CBD5E1] bg-white text-xs text-[#0F172A]"
-                  />
-
-                  <label className="text-[11px] text-[#334155]">Mission prompt</label>
-                  <textarea
-                    value={selectedNode.data.prompt}
-                    onChange={(event) =>
-                      patchNode(selectedNode.id, { prompt: event.target.value })
-                    }
-                    rows={3}
-                    className="w-full rounded-lg border border-[#CBD5E1] bg-white px-2 py-1 text-xs text-[#0F172A] outline-none"
-                  />
-
-                  <div className="grid grid-cols-2 gap-2">
-                    <label className="flex items-center justify-between rounded border border-[#CBD5E1] bg-[#F8FAFC] px-2 py-1 text-[11px] text-[#334155]">
-                      Error Check
-                      <input
-                        type="checkbox"
-                        checked={selectedNode.data.errorCheckEnabled}
-                        onChange={(event) =>
-                          patchNode(selectedNode.id, {
-                            errorCheckEnabled: event.target.checked,
-                          })
-                        }
-                      />
-                    </label>
-                    <select
-                      value={selectedNode.data.monitoring}
-                      onChange={(event) =>
-                        patchNode(selectedNode.id, {
-                          monitoring: event.target.value as WorkflowNodeData['monitoring'],
-                        })
-                      }
-                      className="h-8 rounded border border-[#CBD5E1] bg-[#F8FAFC] px-2 text-[11px] text-[#334155]"
-                    >
-                      <option value="none">No monitor</option>
-                      <option value="sentry">Sentry</option>
-                      <option value="newrelic">New Relic</option>
-                    </select>
+              {ownerPanelMode === 'prompts' && (
+                <div className="space-y-2 rounded-xl border border-[#BFDBFE] bg-[#EFF6FF] p-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-semibold text-[#1D4ED8]">Prompt Control</p>
+                    {isLoadingPrompts && <Loader2 className="h-3.5 w-3.5 animate-spin text-[#1D4ED8]" />}
                   </div>
-
-                  <div className="grid grid-cols-3 gap-2">
+                  <label className="text-[11px] text-[#334155]">Prompt profile title</label>
+                  <Input
+                    value={promptProfileTitle}
+                    onChange={(event) => setPromptProfileTitle(event.target.value)}
+                    className="h-8 border-[#93C5FD] bg-white text-xs text-[#0F172A]"
+                    placeholder="e.g. Owner Direction"
+                  />
+                  <label className="text-[11px] text-[#334155]">Global prompt (all AIs)</label>
+                  <textarea
+                    value={globalPromptDraft}
+                    onChange={(event) => setGlobalPromptDraft(event.target.value)}
+                    rows={4}
+                    className="w-full rounded-lg border border-[#93C5FD] bg-white px-2 py-1 text-xs text-[#0F172A] outline-none"
+                    placeholder="Write global company strategy, style, constraints..."
+                  />
+                  {selectedNode && (
+                    <>
+                      <label className="text-[11px] text-[#334155]">
+                        Selected AI prompt ({selectedNode.data.label})
+                      </label>
+                      <textarea
+                        value={selectedNode.data.prompt}
+                        onChange={(event) => patchNode(selectedNode.id, { prompt: event.target.value })}
+                        rows={3}
+                        className="w-full rounded-lg border border-[#93C5FD] bg-white px-2 py-1 text-xs text-[#0F172A] outline-none"
+                      />
+                    </>
+                  )}
+                  <div className="grid grid-cols-2 gap-2">
                     <Button
                       size="sm"
                       className="h-8 bg-[#1D4ED8] text-white hover:bg-[#1E40AF]"
-                      onClick={duplicateSelectedNode}
+                      onClick={saveOwnerPrompts}
+                      disabled={isSavingPrompts}
                     >
-                      Duplicate
+                      {isSavingPrompts ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : null}
+                      Save Prompts
                     </Button>
                     <Button
                       size="sm"
-                      className="h-8 bg-[#7C3AED] text-white hover:bg-[#6D28D9]"
-                      onClick={toggleCollapseSelected}
+                      className="h-8 bg-white text-[#1D4ED8] hover:bg-[#DBEAFE]"
+                      onClick={applyPromptToAllWorkers}
                     >
-                      {collapsedNodeIds.includes(selectedNode.id) ? 'Expand' : 'Collapse'}
-                    </Button>
-                    <Button
-                      size="sm"
-                      className="h-8 bg-[#DC2626] text-white hover:bg-[#B91C1C]"
-                      onClick={deleteSelectedBranch}
-                    >
-                      Delete
+                      Apply to all AIs
                     </Button>
                   </div>
                 </div>
               )}
 
-              <div className="rounded-xl border border-[#FDE68A] bg-[#FFFBEB] p-3">
-                <div className="mb-2 flex items-center justify-between">
-                  <p className="text-xs font-semibold text-[#92400E]">Workflow Validation</p>
-                  <Button
-                    size="sm"
-                    className="h-7 bg-white text-[#92400E] hover:bg-[#FEF3C7]"
-                    onClick={() => void validateActiveWorkflow(false)}
-                    disabled={isValidating || !activeWorkflowId}
-                  >
-                    Refresh
+              {ownerPanelMode === 'todo' && (
+                <div className="space-y-2 rounded-xl border border-[#A7F3D0] bg-[#ECFDF5] p-3">
+                  <p className="text-xs font-semibold text-[#065F46]">Owner Todo + Async Manager</p>
+                  <label className="text-[11px] text-[#065F46]">TODO</label>
+                  <textarea
+                    value={ownerTodoText}
+                    onChange={(event) => setOwnerTodoText(event.target.value)}
+                    rows={3}
+                    className="w-full rounded-lg border border-[#6EE7B7] bg-white px-2 py-1 text-xs text-[#064E3B] outline-none"
+                    placeholder="List objectives and tasks here..."
+                  />
+                  <label className="text-[11px] text-[#065F46]">Async Manager Notes / Prompts</label>
+                  <textarea
+                    value={ownerAsyncNote}
+                    onChange={(event) => setOwnerAsyncNote(event.target.value)}
+                    rows={3}
+                    className="w-full rounded-lg border border-[#6EE7B7] bg-white px-2 py-1 text-xs text-[#064E3B] outline-none"
+                    placeholder="Write async hand-off instructions for manager AI..."
+                  />
+                  <Button size="sm" className="h-8 bg-[#059669] text-white hover:bg-[#047857]" onClick={saveOwnerNotes}>
+                    Save Todo/Async
                   </Button>
                 </div>
-                {!validationReport && (
-                  <p className="text-[11px] text-[#92400E]">No validation report yet.</p>
-                )}
-                {validationReport && (
-                  <div className="space-y-2">
-                    <p className="text-[11px] text-[#92400E]">
-                      Score {validationReport.score}/100 • Errors {validationReport.summary.errors} •
-                      Warnings {validationReport.summary.warnings} • Infos {validationReport.summary.infos}
-                    </p>
-                    <div className="max-h-24 space-y-1 overflow-auto">
-                      {validationReport.issues.slice(0, 6).map((issue, index) => (
-                        <div
-                          key={`${issue.code}-${index}`}
-                          className={`rounded border px-2 py-1 text-[10px] ${
-                            issue.severity === 'error'
-                              ? 'border-red-200 bg-red-50 text-red-700'
-                              : issue.severity === 'warning'
-                              ? 'border-amber-200 bg-amber-50 text-amber-700'
-                              : 'border-blue-200 bg-blue-50 text-blue-700'
-                          }`}
-                        >
-                          [{issue.severity}] {issue.message}
+              )}
+
+              {ownerPanelMode === 'output' && (
+                <>
+                  <div className="rounded-xl border border-[#BFDBFE] bg-[#EFF6FF] p-3">
+                    <p className="mb-1 text-xs font-semibold text-[#1D4ED8]">Live Task Output</p>
+                    <pre className="max-h-28 overflow-auto whitespace-pre-wrap text-[11px] text-[#1F2937]">
+                      {runOutput || 'No execution yet.'}
+                    </pre>
+                  </div>
+                  <div className="rounded-xl border border-[#C7D2FE] bg-[#EEF2FF] p-3">
+                    <p className="mb-1 text-xs font-semibold text-[#4338CA]">Recent Activity</p>
+                    <div className="max-h-28 space-y-2 overflow-auto">
+                      {auditRows.length === 0 && <p className="text-[11px] text-[#475569]">No entries yet.</p>}
+                      {auditRows.slice(0, 6).map((row) => (
+                        <div key={row.id} className="rounded border border-[#E2E8F0] bg-white p-2">
+                          <div className="text-[11px] font-medium text-[#1E3A8A]">{row.action}</div>
+                          <div className="text-[10px] text-[#475569]">{new Date(row.createdAt).toLocaleString()}</div>
                         </div>
                       ))}
-                      {validationReport.issues.length === 0 && (
-                        <p className="text-[11px] text-emerald-700">No issues detected.</p>
-                      )}
                     </div>
                   </div>
-                )}
-              </div>
+                </>
+              )}
 
-              <div className="rounded-xl border border-[#BFDBFE] bg-[#EFF6FF] p-3">
-                <div className="mb-2 flex items-center justify-between">
-                  <p className="text-xs font-semibold text-[#1D4ED8]">Reliability Matrix</p>
-                  <Button
-                    size="sm"
-                    className="h-7 bg-white text-[#1D4ED8] hover:bg-[#DBEAFE]"
-                    onClick={() => void fetchSystemHealth()}
-                    disabled={isHealthLoading}
-                  >
-                    {isHealthLoading ? 'Checking...' : 'Refresh'}
-                  </Button>
-                </div>
-                <div className="max-h-28 space-y-1 overflow-auto">
-                  {systemHealthChecks.length === 0 && (
-                    <p className="text-[11px] text-[#1D4ED8]">No health data yet.</p>
-                  )}
-                  {systemHealthChecks.map((check) => (
-                    <div
-                      key={check.id}
-                      className={`rounded border px-2 py-1 text-[10px] ${
-                        check.status === 'ok'
-                          ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                          : check.status === 'warning'
-                          ? 'border-amber-200 bg-amber-50 text-amber-700'
-                          : 'border-red-200 bg-red-50 text-red-700'
-                      }`}
-                    >
-                      <span className="font-semibold">{check.label}</span>: {check.detail}
+              {ownerPanelMode === 'inspect' && (
+                <>
+                  {!selectedNode && (
+                    <div className="rounded-xl border border-dashed border-[#CBD5E1] bg-white p-3 text-xs text-[#64748B]">
+                      Select a block to edit worker settings and code.
                     </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="rounded-xl border border-[#BFDBFE] bg-[#EFF6FF] p-3">
-                <p className="mb-1 text-xs font-semibold text-[#1D4ED8]">Execution Output</p>
-                <pre className="max-h-24 overflow-auto whitespace-pre-wrap text-[11px] text-[#1F2937]">
-                  {runOutput || 'No execution yet.'}
-                </pre>
-              </div>
-
-              <div className="rounded-xl border border-[#D1FAE5] bg-[#ECFDF5] p-3">
-                <div className="mb-2 flex items-center justify-between">
-                  <p className="text-xs font-semibold text-[#065F46]">Memory Vault</p>
-                  <span className="inline-flex items-center gap-1 text-[10px] text-[#047857]">
-                    <Database className="h-3.5 w-3.5" />
-                    {memoryRecords.length} entries
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <Input
-                    value={memoryNamespace}
-                    onChange={(event) => setMemoryNamespace(event.target.value)}
-                    className="h-8 border-[#6EE7B7] bg-white text-xs text-[#064E3B]"
-                    placeholder="namespace"
-                  />
-                  <Input
-                    value={memoryKey}
-                    onChange={(event) => setMemoryKey(event.target.value)}
-                    className="h-8 border-[#6EE7B7] bg-white text-xs text-[#064E3B]"
-                    placeholder="key"
-                  />
-                </div>
-
-                <textarea
-                  value={memoryValue}
-                  onChange={(event) => setMemoryValue(event.target.value)}
-                  rows={2}
-                  className="mt-2 w-full rounded-lg border border-[#6EE7B7] bg-white px-2 py-1 text-xs text-[#064E3B] outline-none"
-                  placeholder='value (text or JSON, e.g. {"budget":12000})'
-                />
-
-                <div className="mt-2 flex gap-2">
-                  <Button
-                    size="sm"
-                    className="h-8 bg-[#059669] text-white hover:bg-[#047857]"
-                    onClick={saveMemoryRecord}
-                    disabled={isMemorySaving || !activeWorkflowId}
-                  >
-                    {isMemorySaving ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : null}
-                    Store
-                  </Button>
-                  <Button
-                    size="sm"
-                    className="h-8 bg-white text-[#065F46] hover:bg-[#F0FDF4]"
-                    onClick={fetchMemory}
-                    disabled={isMemoryLoading || !activeWorkflowId}
-                  >
-                    Refresh
-                  </Button>
-                </div>
-
-                <div className="mt-2 max-h-32 space-y-2 overflow-auto pr-1">
-                  {isMemoryLoading && (
-                    <p className="text-[11px] text-[#047857]">Loading memory...</p>
                   )}
-                  {!isMemoryLoading && memoryRecords.length === 0 && (
-                    <p className="text-[11px] text-[#047857]">
-                      No memory yet. Store state for workers and manager prompts.
-                    </p>
+                  {selectedNode && (
+                    <div className="space-y-2 rounded-xl border border-[#CBD5E1] bg-white p-3">
+                      <label className="text-[11px] text-[#334155]">Node label</label>
+                      <Input
+                        value={selectedNode.data.label}
+                        onChange={(event) => patchNode(selectedNode.id, { label: event.target.value })}
+                        className="h-8 border-[#CBD5E1] bg-white text-xs text-[#0F172A]"
+                      />
+
+                      <label className="text-[11px] text-[#334155]">Worker type</label>
+                      <Input
+                        value={selectedNode.data.workerType || ''}
+                        onChange={(event) => patchNode(selectedNode.id, { workerType: event.target.value })}
+                        className="h-8 border-[#CBD5E1] bg-white text-xs text-[#0F172A]"
+                      />
+
+                      <label className="text-[11px] text-[#334155]">Role</label>
+                      <select
+                        value={selectedNode.data.role}
+                        onChange={(event) => {
+                          const nextRole = event.target.value as NodeRole
+                          setIsDirty(true)
+                          setNodes((prev) =>
+                            prev.map((node) =>
+                              node.id === selectedNode.id
+                                ? {
+                                    ...node,
+                                    type: nextRole,
+                                    data: {
+                                      ...node.data,
+                                      role: nextRole,
+                                      codeSnippet:
+                                        nextRole === 'code'
+                                          ? node.data.codeSnippet || {
+                                              language: 'typescript',
+                                              content: 'export const runTask = () => "custom function output";\n',
+                                            }
+                                          : node.data.codeSnippet,
+                                    },
+                                  }
+                                : node
+                            )
+                          )
+                        }}
+                        className="h-8 w-full rounded-lg border border-[#CBD5E1] bg-white px-2 text-xs text-[#0F172A]"
+                      >
+                        <option value="manager">Manager</option>
+                        <option value="programmer">Programmer</option>
+                        <option value="code">Code</option>
+                      </select>
+
+                      <label className="text-[11px] text-[#334155]">Capabilities (comma)</label>
+                      <Input
+                        value={(selectedNode.data.capabilities || []).join(', ')}
+                        onChange={(event) =>
+                          patchNode(selectedNode.id, { capabilities: parseCapabilities(event.target.value) })
+                        }
+                        className="h-8 border-[#CBD5E1] bg-white text-xs text-[#0F172A]"
+                      />
+
+                      <label className="text-[11px] text-[#334155]">Mission prompt</label>
+                      <textarea
+                        value={selectedNode.data.prompt}
+                        onChange={(event) => patchNode(selectedNode.id, { prompt: event.target.value })}
+                        rows={3}
+                        className="w-full rounded-lg border border-[#CBD5E1] bg-white px-2 py-1 text-xs text-[#0F172A] outline-none"
+                      />
+
+                      {selectedNode.data.role === 'code' && (
+                        <>
+                          <label className="text-[11px] text-[#334155]">Code editor (owner quick edit)</label>
+                          <textarea
+                            value={selectedNode.data.codeSnippet?.content || ''}
+                            onChange={(event) =>
+                              patchNode(selectedNode.id, {
+                                codeSnippet: {
+                                  language: selectedNode.data.codeSnippet?.language || 'typescript',
+                                  content: event.target.value,
+                                },
+                              })
+                            }
+                            rows={8}
+                            className="w-full rounded-lg border border-[#CBD5E1] bg-white px-2 py-1 font-mono text-[11px] text-[#0F172A] outline-none"
+                          />
+                        </>
+                      )}
+
+                      <div className="grid grid-cols-3 gap-2">
+                        <Button size="sm" className="h-8 bg-[#1D4ED8] text-white hover:bg-[#1E40AF]" onClick={duplicateSelectedNode}>
+                          Duplicate
+                        </Button>
+                        <Button size="sm" className="h-8 bg-[#7C3AED] text-white hover:bg-[#6D28D9]" onClick={toggleCollapseSelected}>
+                          {collapsedNodeIds.includes(selectedNode.id) ? 'Expand' : 'Collapse'}
+                        </Button>
+                        <Button size="sm" className="h-8 bg-[#DC2626] text-white hover:bg-[#B91C1C]" onClick={deleteSelectedBranch}>
+                          Delete
+                        </Button>
+                      </div>
+
+                      {showAdvancedMenu && (
+                        <div className="grid grid-cols-2 gap-2 border-t border-[#E2E8F0] pt-2">
+                          <label className="flex items-center justify-between rounded border border-[#CBD5E1] bg-[#F8FAFC] px-2 py-1 text-[11px] text-[#334155]">
+                            Error Check
+                            <input
+                              type="checkbox"
+                              checked={selectedNode.data.errorCheckEnabled}
+                              onChange={(event) =>
+                                patchNode(selectedNode.id, { errorCheckEnabled: event.target.checked })
+                              }
+                            />
+                          </label>
+                          <select
+                            value={selectedNode.data.monitoring}
+                            onChange={(event) =>
+                              patchNode(selectedNode.id, {
+                                monitoring: event.target.value as WorkflowNodeData['monitoring'],
+                              })
+                            }
+                            className="h-8 rounded border border-[#CBD5E1] bg-[#F8FAFC] px-2 text-[11px] text-[#334155]"
+                          >
+                            <option value="none">No monitor</option>
+                            <option value="sentry">Sentry</option>
+                            <option value="newrelic">New Relic</option>
+                          </select>
+                        </div>
+                      )}
+                    </div>
                   )}
-                  {memoryRecords.slice(0, 10).map((record) => (
-                    <div
-                      key={record.id}
-                      className="rounded border border-[#A7F3D0] bg-white p-2 text-[10px] text-[#065F46]"
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="font-semibold">
-                          {record.namespace}/{record.key}
-                        </span>
-                        <button
-                          type="button"
-                          className="rounded border border-[#A7F3D0] px-1.5 py-0.5 text-[10px] text-[#065F46] hover:bg-[#ECFDF5]"
-                          onClick={() =>
-                            deleteMemoryVaultEntry(record.namespace, record.key)
-                          }
+                </>
+              )}
+
+              {showAdvancedMenu && (
+                <>
+                  <div className="rounded-xl border border-[#FDE68A] bg-[#FFFBEB] p-3">
+                    <div className="mb-2 flex items-center justify-between">
+                      <p className="text-xs font-semibold text-[#92400E]">Workflow Validation</p>
+                      <Button
+                        size="sm"
+                        className="h-7 bg-white text-[#92400E] hover:bg-[#FEF3C7]"
+                        onClick={() => void validateActiveWorkflow(false)}
+                        disabled={isValidating || !activeWorkflowId}
+                      >
+                        Refresh
+                      </Button>
+                    </div>
+                    {!validationReport && <p className="text-[11px] text-[#92400E]">No validation report yet.</p>}
+                    {validationReport && (
+                      <div className="space-y-2">
+                        <p className="text-[11px] text-[#92400E]">
+                          Score {validationReport.score}/100 • Errors {validationReport.summary.errors} • Warnings{' '}
+                          {validationReport.summary.warnings}
+                        </p>
+                        <div className="max-h-24 space-y-1 overflow-auto">
+                          {validationReport.issues.slice(0, 6).map((issue, index) => (
+                            <div
+                              key={`${issue.code}-${index}`}
+                              className={`rounded border px-2 py-1 text-[10px] ${
+                                issue.severity === 'error'
+                                  ? 'border-red-200 bg-red-50 text-red-700'
+                                  : issue.severity === 'warning'
+                                  ? 'border-amber-200 bg-amber-50 text-amber-700'
+                                  : 'border-blue-200 bg-blue-50 text-blue-700'
+                              }`}
+                            >
+                              [{issue.severity}] {issue.message}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="rounded-xl border border-[#BFDBFE] bg-[#EFF6FF] p-3">
+                    <div className="mb-2 flex items-center justify-between">
+                      <p className="text-xs font-semibold text-[#1D4ED8]">Reliability Matrix</p>
+                      <Button
+                        size="sm"
+                        className="h-7 bg-white text-[#1D4ED8] hover:bg-[#DBEAFE]"
+                        onClick={() => void fetchSystemHealth()}
+                        disabled={isHealthLoading}
+                      >
+                        {isHealthLoading ? 'Checking...' : 'Refresh'}
+                      </Button>
+                    </div>
+                    <div className="max-h-24 space-y-1 overflow-auto">
+                      {systemHealthChecks.map((check) => (
+                        <div
+                          key={check.id}
+                          className={`rounded border px-2 py-1 text-[10px] ${
+                            check.status === 'ok'
+                              ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                              : check.status === 'warning'
+                              ? 'border-amber-200 bg-amber-50 text-amber-700'
+                              : 'border-red-200 bg-red-50 text-red-700'
+                          }`}
                         >
-                          delete
-                        </button>
-                      </div>
-                      <p className="mt-1 break-all text-[#047857]">
-                        {formatMemoryValue(record.value)}
-                      </p>
+                          <span className="font-semibold">{check.label}</span>: {check.detail}
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-              </div>
+                  </div>
 
-              <div className="rounded-xl border border-[#C7D2FE] bg-[#EEF2FF] p-3">
-                <p className="mb-1 text-xs font-semibold text-[#4338CA]">Recent Audit</p>
-                <div className="max-h-28 space-y-2 overflow-auto">
-                  {auditRows.length === 0 && (
-                    <p className="text-[11px] text-[#475569]">No entries yet.</p>
-                  )}
-                  {auditRows.slice(0, 6).map((row) => (
-                    <div key={row.id} className="rounded border border-[#E2E8F0] bg-white p-2">
-                      <div className="text-[11px] font-medium text-[#1E3A8A]">{row.action}</div>
-                      <div className="text-[10px] text-[#475569]">
-                        {new Date(row.createdAt).toLocaleString()}
-                      </div>
+                  <div className="rounded-xl border border-[#D1FAE5] bg-[#ECFDF5] p-3">
+                    <div className="mb-2 flex items-center justify-between">
+                      <p className="text-xs font-semibold text-[#065F46]">Memory Vault</p>
+                      <span className="inline-flex items-center gap-1 text-[10px] text-[#047857]">
+                        <Database className="h-3.5 w-3.5" />
+                        {memoryRecords.length}
+                      </span>
                     </div>
-                  ))}
-                </div>
-              </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Input
+                        value={memoryNamespace}
+                        onChange={(event) => setMemoryNamespace(event.target.value)}
+                        className="h-8 border-[#6EE7B7] bg-white text-xs text-[#064E3B]"
+                        placeholder="namespace"
+                      />
+                      <Input
+                        value={memoryKey}
+                        onChange={(event) => setMemoryKey(event.target.value)}
+                        className="h-8 border-[#6EE7B7] bg-white text-xs text-[#064E3B]"
+                        placeholder="key"
+                      />
+                    </div>
+                    <textarea
+                      value={memoryValue}
+                      onChange={(event) => setMemoryValue(event.target.value)}
+                      rows={2}
+                      className="mt-2 w-full rounded-lg border border-[#6EE7B7] bg-white px-2 py-1 text-xs text-[#064E3B] outline-none"
+                    />
+                    <div className="mt-2 flex gap-2">
+                      <Button
+                        size="sm"
+                        className="h-8 bg-[#059669] text-white hover:bg-[#047857]"
+                        onClick={saveMemoryRecord}
+                        disabled={isMemorySaving || !activeWorkflowId}
+                      >
+                        Store
+                      </Button>
+                      <Button
+                        size="sm"
+                        className="h-8 bg-white text-[#065F46] hover:bg-[#F0FDF4]"
+                        onClick={fetchMemory}
+                        disabled={isMemoryLoading || !activeWorkflowId}
+                      >
+                        Refresh
+                      </Button>
+                    </div>
+                    <div className="mt-2 max-h-28 space-y-1 overflow-auto">
+                      {memoryRecords.slice(0, 8).map((record) => (
+                        <div key={record.id} className="rounded border border-[#A7F3D0] bg-white p-2 text-[10px] text-[#065F46]">
+                          <div className="flex items-center justify-between">
+                            <span className="font-semibold">{record.namespace}/{record.key}</span>
+                            <button
+                              type="button"
+                              className="rounded border border-[#A7F3D0] px-1 py-0.5 text-[10px] text-[#065F46]"
+                              onClick={() => deleteMemoryVaultEntry(record.namespace, record.key)}
+                            >
+                              del
+                            </button>
+                          </div>
+                          <p className="mt-1 break-all text-[#047857]">{formatMemoryValue(record.value)}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
             </aside>
           </div>
         </div>

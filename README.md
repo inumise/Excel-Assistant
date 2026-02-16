@@ -7,12 +7,13 @@ Palette: `#1A1A1A` / `#FFD700` / `#C9A483`
 ## What is included
 
 - **CEO Drawboard UI** on `/` (and `/workers` alias)
-  - Top-line command bar + 2D drag-and-drop board
-  - Left role/tool/function library with icon cards
-  - Right inspector for node mission, capabilities, role, and controls
+  - Owner-first top command bar + empty schematic map board
+  - Left AI worker list for click/hold + drag-to-map on mobile/PC
+  - Right owner control window with Prompt / Code / Todo / Output modes
   - Futuristic clean-white style with deep RGB pulse/wave motion
   - Corporate role templates + universal custom role builder
-  - Build any org/tool/function structure with root/child/sibling/connect controls
+  - Build any org/tool/function structure with drag-to-create blocks
+  - Black input dot + red output dot connectors between blocks
   - Auto-arrange layout, collapse/expand branches, duplicate/delete subtrees
   - Monaco code blocks with:
     - AI Program

@@ -9,7 +9,11 @@ import {
   WhatsAppSession,
   Workflow,
 } from '@/types/workflow'
-import { defaultAISettings, DEMO_USER_ID, createWebDesignFactoryTemplate } from '@/lib/workflow-template'
+import {
+  createOwnerStructureTemplate,
+  defaultAISettings,
+  DEMO_USER_ID,
+} from '@/lib/workflow-template'
 import { decryptAIKeys, encryptAIKeys } from '@/lib/secure-keys'
 import { getServerSupabaseClient } from '@/lib/supabase'
 import { isUuid, resolveUserId } from '@/lib/user-context'
@@ -28,7 +32,7 @@ function getInMemoryStore(): InMemoryStore {
   if (globalStore.__hyperStore) return globalStore.__hyperStore
 
   globalStore.__hyperStore = {
-    workflows: [createWebDesignFactoryTemplate(DEMO_USER_ID)],
+    workflows: [createOwnerStructureTemplate(DEMO_USER_ID)],
     settings: [defaultAISettings],
     bugtracks: [],
     sessions: [],
@@ -144,7 +148,7 @@ export async function listWorkflows(userId: string): Promise<Workflow[]> {
   const filtered = store.workflows.filter((workflow) => workflow.userId === effectiveUserId)
   if (filtered.length > 0) return filtered.map(cloneWorkflow)
 
-  const seeded = createWebDesignFactoryTemplate(effectiveUserId)
+  const seeded = createOwnerStructureTemplate(effectiveUserId)
   store.workflows.push(seeded)
   return [cloneWorkflow(seeded)]
 }
