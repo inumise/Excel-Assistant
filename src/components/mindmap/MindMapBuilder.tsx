@@ -7,6 +7,8 @@ import { DEMO_USER_ID } from '@/lib/workflow-template'
 import { getWorkflowExecutionOrder } from '@/lib/workflow-graph'
 import { isAINode } from '@/lib/mindmap-runtime'
 import { MindMapCanvas } from '@/components/mindmap/MindMapCanvas'
+import { CompanyComposerPanel } from '@/components/mindmap/CompanyComposerPanel'
+import { CompanyComposerInput, composeCompanyGraph } from '@/components/mindmap/company-composer'
 import { EdgeDetailsPanel } from '@/components/mindmap/EdgeDetailsPanel'
 import { GlobalPanel } from '@/components/mindmap/GlobalPanel'
 import { NodeDetailsPanel } from '@/components/mindmap/NodeDetailsPanel'
@@ -60,6 +62,13 @@ export function MindMapBuilder() {
 
   const blueprintOptions = useMemo(() => listWorkforceBlueprints(), [])
   const [selectedBlueprintId, setSelectedBlueprintId] = useState<string>(blueprintOptions[0]?.id || 'lean-core')
+  const [composerInput, setComposerInput] = useState<CompanyComposerInput>({
+    objective: 'Build a high-performance automated company that can run core workflows 24/7.',
+    scale: 'growth',
+    focus: 'balanced',
+    includeFunctionRuntime: true,
+    includeCompliance: true,
+  })
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -290,6 +299,55 @@ export function MindMapBuilder() {
     applyWorkforceBlueprint(false)
   }, [applyWorkforceBlueprint])
 
+  const applyCompanyComposition = useCallback(
+    (replaceCurrent: boolean) => {
+      setIsBuildingBlueprint(true)
+      try {
+        const origin = flowInstance
+          ? flowInstance.screenToFlowPosition({
+              x: window.innerWidth * 0.52,
+              y: window.innerHeight * 0.48,
+            })
+          : { x: 120, y: 120 }
+        const composed = composeCompanyGraph({
+          input: composerInput,
+          origin,
+        })
+
+        updateDocument(
+          (previous) => ({
+            ...previous,
+            nodes: replaceCurrent ? composed.nodes : [...previous.nodes, ...composed.nodes],
+            edges: replaceCurrent ? composed.edges : [...previous.edges, ...composed.edges],
+            updatedAt: new Date().toISOString(),
+          }),
+          { recordHistory: true }
+        )
+        setRunOutput(composed.summary)
+        clearCatalogDragState()
+        setSelectedNodeId(null)
+        setSelectedEdgeId(null)
+      } finally {
+        setIsBuildingBlueprint(false)
+      }
+    },
+    [clearCatalogDragState, composerInput, flowInstance, updateDocument]
+  )
+
+  const buildComposedCompany = useCallback(() => {
+    if (
+      document.nodes.length > 0 &&
+      !window.confirm('Replace current map with generated company composition?')
+    ) {
+      return
+    }
+    applyCompanyComposition(true)
+  }, [applyCompanyComposition, document.nodes.length])
+
+  const appendComposedCompany = useCallback(() => {
+    applyCompanyComposition(false)
+  }, [applyCompanyComposition])
+
   const runValidation = useCallback(async () => {
     setIsValidating(true)
     try {
@@ -430,6 +488,32 @@ export function MindMapBuilder() {
     }
   }, [applyNodeRuntimePatch, document, runInput, sessionId])
 
+  const runAutopilotCycles = useCallback(async () => {
+    setIsRunning(true)
+    const cycleOutputs: string[] = []
+    try {
+      for (let cycle = 1; cycle <= 3; cycle += 1) {
+        const workflow = buildWorkflowFromDocument({
+          document,
+          userId: DEMO_USER_ID,
+        })
+        const triggerText = `${runInput} (autopilot cycle ${cycle})`
+        const payload = await runMindMap({
+          workflow,
+          triggerText,
+          userId: DEMO_USER_ID,
+          sessionId,
+        })
+        cycleOutputs.push(`Cycle ${cycle}: ${payload.success ? 'ok' : 'failed'}\n${payload.output || '(no output)'}`)
+      }
+      setRunOutput(cycleOutputs.join('\n\n'))
+    } catch (error) {
+      setRunOutput(`Autopilot failed: ${error instanceof Error ? error.message : 'unknown error'}`)
+    } finally {
+      setIsRunning(false)
+    }
+  }, [document, runInput, sessionId])
+
   const refreshReliability = useCallback(async () => {
     try {
       const payload = await fetchReliability()
@@ -566,6 +650,14 @@ export function MindMapBuilder() {
             <Play className="h-4 w-4" />
             Run
           </button>
+          <button
+            type="button"
+            onClick={() => void runAutopilotCycles()}
+            disabled={isRunning}
+            className="mind-tool-button inline-flex h-9 items-center gap-1 rounded-md px-3 text-sm disabled:opacity-60"
+          >
+            Run Autopilot x3
+          </button>
           <div className="inline-flex h-9 items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 text-xs text-emerald-700">
             <Save className="h-3.5 w-3.5" />
             Auto-saved
@@ -611,6 +703,14 @@ export function MindMapBuilder() {
             onAddTemplate={addTemplateNodeNearCenter}
             onDragStateChange={setIsCatalogDragging}
             onDragTemplateChange={setDragTemplateId}
+          />
+
+          <CompanyComposerPanel
+            value={composerInput}
+            onChange={setComposerInput}
+            onBuildReplace={buildComposedCompany}
+            onBuildAppend={appendComposedCompany}
+            isBusy={isBuildingBlueprint}
           />
         </div>
 

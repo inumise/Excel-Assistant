@@ -22,3 +22,24 @@ test('catalog boxes can be added by click and drag', async ({ page }) => {
   })
   await expect(nodes).toHaveCount(initialCount + 2)
 })
+
+test('company composer generates automated workforce graph', async ({ page }) => {
+  await page.goto('/workers')
+  await page.getByRole('button', { name: 'Build New Company' }).click()
+
+  const nodes = page.locator('.react-flow__node')
+  await expect.poll(async () => nodes.count()).toBeGreaterThan(8)
+  await expect(page.getByText('Generated')).toBeVisible()
+})
+
+test('company composer can generate full structure', async ({ page }) => {
+  await page.goto('/workers')
+
+  await page
+    .getByRole('button', { name: 'Build New Company' })
+    .click()
+
+  const nodeCount = await page.locator('.react-flow__node').count()
+  expect(nodeCount).toBeGreaterThanOrEqual(7)
+  await expect(page.getByText('Generated')).toBeVisible()
+})
