@@ -1,5 +1,6 @@
 import type { Edge, Node, XYPosition } from 'reactflow'
 import type {
+  EdgeDataType,
   NodeAIConfig,
   NodeMemoryScope,
   NodeRoutingMode,
@@ -111,7 +112,6 @@ const storageDefaultsByKind: Record<
 }
 
 export function createMindMapNode(template: NodeTemplateDefinition, position: XYPosition): MindMapNode {
-  const now = new Date().toISOString()
   const id = `${template.id}-${crypto.randomUUID().slice(0, 8)}`
 
   const aiConfig: NodeAIConfig = {
@@ -157,28 +157,19 @@ export function createMindMapNode(template: NodeTemplateDefinition, position: XY
               dropPolicy: 'oldest',
             }
           : undefined,
-      metadata: {
-        displayName: labelBase,
-        tags: [],
-        createdAt: now,
-      },
       codeSnippet:
         template.kind === 'ai'
           ? {
               language: 'typescript',
               content: '',
-              version: 1,
-              lastUpdated: now,
             }
           : undefined,
-      monitorConfig: {
-        enabled: false,
-        watchIntervalMs: 120000,
-      },
       errorHandler: {
-        strategy: 'retry',
         retryCount: 1,
+        notifyWhatsapp: false,
       },
+      errorCheckEnabled: false,
+      monitoring: 'none',
       capabilities: [],
     },
     width: template.kind === 'text' ? 180 : 260,
@@ -230,6 +221,9 @@ export function normalizeMindMapDocument(input?: Partial<MindMapDocument>): Mind
       nodeKind: kind,
       notes: source.data?.notes || '',
       aiConfig: source.data?.aiConfig || {},
+      errorHandler: source.data?.errorHandler || { retryCount: 1, notifyWhatsapp: false },
+      errorCheckEnabled: source.data?.errorCheckEnabled ?? false,
+      monitoring: source.data?.monitoring || 'none',
     }
 
     return {
@@ -268,10 +262,10 @@ export function buildWorkflowFromDocument(params: {
     globalDefaults: params.document.globalDefaults,
     nodes: params.document.nodes.map((node) => ({
       id: node.id,
-      type: node.type || 'mindMapNode',
+      type: node.data.role,
       position: node.position,
       data: node.data,
-      parentId: node.parentNode,
+      parentNode: node.parentNode,
     })),
     edges: params.document.edges.map((edge) => ({
       id: edge.id,
@@ -280,7 +274,7 @@ export function buildWorkflowFromDocument(params: {
       sourceHandle: edge.sourceHandle || undefined,
       targetHandle: edge.targetHandle || undefined,
       label: typeof edge.label === 'string' ? edge.label : undefined,
-      dataType: (edge.data?.dataType as 'prompt' | 'code' | 'report') || 'prompt',
+      dataType: (edge.data?.dataType as EdgeDataType) || 'ai',
       animated: Boolean(edge.animated),
     })),
     createdAt: now,

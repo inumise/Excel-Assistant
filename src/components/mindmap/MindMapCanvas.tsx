@@ -110,7 +110,7 @@ function MindMapCanvasInner({
               ...connection,
               id: `edge-${crypto.randomUUID().slice(0, 8)}`,
               animated: false,
-              data: { dataType: 'prompt' },
+              data: { dataType: 'ai' },
               label: '',
             },
             previous.edges
@@ -301,11 +301,11 @@ function MindMapCanvasInner({
         onPointerUp={onDrawPointerUp}
         onPointerLeave={onDrawPointerUp}
       >
-        <ReactFlow<MindMapNode, MindMapEdge>
+        <ReactFlow
           nodes={document.nodes}
           edges={document.edges}
           nodeTypes={nodeTypes}
-          onInit={onFlowReady}
+          onInit={(instance) => onFlowReady(instance as ReactFlowInstance<MindMapNode, MindMapEdge>)}
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           onConnect={onConnect}
