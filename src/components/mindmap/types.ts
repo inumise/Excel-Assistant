@@ -1,0 +1,315 @@
+import type { Edge, Node, XYPosition } from 'reactflow'
+import type {
+  NodeAIConfig,
+  NodeMemoryScope,
+  NodeRoutingMode,
+  Workflow,
+  WorkflowGlobalDefaults,
+  WorkflowNodeData,
+} from '@/types/workflow'
+
+export type MindMapTool = 'select' | 'box' | 'ai-box' | 'text' | 'pencil' | 'eraser'
+
+export type MindMapNodeKind = 'box' | 'ai' | 'text' | 'buffer' | 'storage'
+
+export interface FreehandPoint {
+  x: number
+  y: number
+}
+
+export interface FreehandStroke {
+  id: string
+  color: string
+  width: number
+  points: FreehandPoint[]
+}
+
+export interface MindMapNodeData extends WorkflowNodeData {
+  nodeKind: MindMapNodeKind
+  notes: string
+  aiConfig: NodeAIConfig
+}
+
+export type MindMapNode = Node<MindMapNodeData>
+export type MindMapEdge = Edge
+
+export interface MindMapDocument {
+  nodes: MindMapNode[]
+  edges: MindMapEdge[]
+  strokes: FreehandStroke[]
+  globalDefaults: WorkflowGlobalDefaults
+  updatedAt: string
+}
+
+export interface NodeTemplateDefinition {
+  id: string
+  title: string
+  description: string
+  kind: MindMapNodeKind
+  role: WorkflowNodeData['role']
+}
+
+export const DEFAULT_GLOBALS: WorkflowGlobalDefaults = {
+  systemPrompt: 'Think clearly, respond briefly, and keep context grounded in the map.',
+  model: 'gpt-4.1-mini',
+  temperature: 0.4,
+  routing: 'direct',
+  useMemoryVault: false,
+  memoryScope: 'workflow',
+}
+
+export const NODE_TEMPLATES: NodeTemplateDefinition[] = [
+  {
+    id: 'box',
+    title: 'Box',
+    description: 'Simple map box for ideas and notes',
+    kind: 'box',
+    role: 'text',
+  },
+  {
+    id: 'ai-box',
+    title: 'AI Box',
+    description: 'Configurable AI node with prompt/model/memory/routing',
+    kind: 'ai',
+    role: 'programmer',
+  },
+  {
+    id: 'text',
+    title: 'Text',
+    description: 'Text label for annotations',
+    kind: 'text',
+    role: 'text',
+  },
+  {
+    id: 'buffer',
+    title: 'Buffer',
+    description: 'Queue node that can hold routing messages',
+    kind: 'buffer',
+    role: 'buffer',
+  },
+  {
+    id: 'storage',
+    title: 'Storage',
+    description: 'Storage node for shared values and snapshots',
+    kind: 'storage',
+    role: 'storage',
+  },
+]
+
+const storageDefaultsByKind: Record<
+  MindMapNodeKind,
+  {
+    storageType?: 'database' | 'text' | 'excel'
+    key?: string
+  }
+> = {
+  box: {},
+  ai: {},
+  text: { storageType: 'text' },
+  buffer: {},
+  storage: { storageType: 'database', key: 'shared' },
+}
+
+export function createMindMapNode(template: NodeTemplateDefinition, position: XYPosition): MindMapNode {
+  const now = new Date().toISOString()
+  const id = `${template.id}-${crypto.randomUUID().slice(0, 8)}`
+
+  const aiConfig: NodeAIConfig = {
+    systemPrompt: template.kind === 'ai' ? '' : undefined,
+    model: template.kind === 'ai' ? '' : undefined,
+    temperature: undefined,
+    routing: undefined,
+    useMemoryVault: undefined,
+    memoryScope: undefined,
+    code: undefined,
+  }
+
+  const labelBase =
+    template.kind === 'ai'
+      ? 'AI Box'
+      : template.kind === 'storage'
+      ? 'Storage'
+      : template.kind === 'buffer'
+      ? 'Buffer'
+      : template.kind === 'text'
+      ? 'Text'
+      : 'Box'
+
+  return {
+    id,
+    type: 'mindMapNode',
+    position,
+    data: {
+      label: labelBase,
+      role: template.role,
+      nodeKind: template.kind,
+      workerType: template.kind === 'ai' ? 'ai-box' : template.kind,
+      notes: '',
+      prompt: '',
+      textContent: template.kind === 'text' ? 'New label' : '',
+      aiConfig,
+      storageConfig: template.kind === 'storage' ? { ...storageDefaultsByKind.storage } : undefined,
+      bufferConfig:
+        template.kind === 'buffer'
+          ? {
+              maxItems: 20,
+              releaseMode: 'when-target-ready',
+              dropPolicy: 'oldest',
+            }
+          : undefined,
+      metadata: {
+        displayName: labelBase,
+        tags: [],
+        createdAt: now,
+      },
+      codeSnippet:
+        template.kind === 'ai'
+          ? {
+              language: 'typescript',
+              content: '',
+              version: 1,
+              lastUpdated: now,
+            }
+          : undefined,
+      monitorConfig: {
+        enabled: false,
+        watchIntervalMs: 120000,
+      },
+      errorHandler: {
+        strategy: 'retry',
+        retryCount: 1,
+      },
+      capabilities: [],
+    },
+    width: template.kind === 'text' ? 180 : 260,
+    height: template.kind === 'text' ? 80 : 170,
+    selected: false,
+    draggable: true,
+    connectable: true,
+  }
+}
+
+export function createEmptyMindMapDocument(): MindMapDocument {
+  return {
+    nodes: [],
+    edges: [],
+    strokes: [],
+    globalDefaults: { ...DEFAULT_GLOBALS },
+    updatedAt: new Date().toISOString(),
+  }
+}
+
+export function cloneMindMapDocument(document: MindMapDocument): MindMapDocument {
+  return JSON.parse(JSON.stringify(document)) as MindMapDocument
+}
+
+function inferNodeKind(data: Partial<MindMapNodeData>): MindMapNodeKind {
+  if (data.nodeKind) return data.nodeKind
+  if (data.role === 'storage') return 'storage'
+  if (data.role === 'buffer') return 'buffer'
+  if (data.role === 'manager' || data.role === 'programmer' || data.role === 'code') return 'ai'
+  if (data.role === 'text' && data.textContent?.trim()) return 'text'
+  return 'box'
+}
+
+export function normalizeMindMapDocument(input?: Partial<MindMapDocument>): MindMapDocument {
+  const nodes = (input?.nodes || []).map((rawNode) => {
+    const source = rawNode as MindMapNode
+    const kind = inferNodeKind(source.data || {})
+    const normalizedData: MindMapNodeData = {
+      ...(source.data || {
+        label: 'Node',
+        role: kind === 'ai' ? 'programmer' : kind === 'storage' ? 'storage' : kind === 'buffer' ? 'buffer' : 'text',
+        prompt: '',
+      }),
+      label: source.data?.label || source.id || 'Node',
+      role:
+        source.data?.role ||
+        (kind === 'ai' ? 'programmer' : kind === 'storage' ? 'storage' : kind === 'buffer' ? 'buffer' : 'text'),
+      prompt: source.data?.prompt || '',
+      nodeKind: kind,
+      notes: source.data?.notes || '',
+      aiConfig: source.data?.aiConfig || {},
+    }
+
+    return {
+      ...source,
+      type: 'mindMapNode',
+      data: normalizedData,
+      position: source.position || { x: 0, y: 0 },
+      width: source.width,
+      height: source.height,
+      draggable: true,
+      connectable: true,
+    } satisfies MindMapNode
+  })
+
+  return {
+    nodes,
+    edges: (input?.edges || []).map((edge) => ({ ...(edge as MindMapEdge) })),
+    strokes: (input?.strokes || []).map((stroke) => ({ ...(stroke as FreehandStroke) })),
+    globalDefaults: { ...DEFAULT_GLOBALS, ...(input?.globalDefaults || {}) },
+    updatedAt: input?.updatedAt || new Date().toISOString(),
+  }
+}
+
+export function buildWorkflowFromDocument(params: {
+  document: MindMapDocument
+  userId: string
+  mapId?: string
+  mapName?: string
+}): Workflow {
+  const now = new Date().toISOString()
+  return {
+    id: params.mapId || 'local-mind-map',
+    userId: params.userId,
+    name: params.mapName || 'Mind Map',
+    description: 'Local mind map session',
+    globalDefaults: params.document.globalDefaults,
+    nodes: params.document.nodes.map((node) => ({
+      id: node.id,
+      type: node.type || 'mindMapNode',
+      position: node.position,
+      data: node.data,
+      parentId: node.parentNode,
+    })),
+    edges: params.document.edges.map((edge) => ({
+      id: edge.id,
+      source: edge.source,
+      target: edge.target,
+      sourceHandle: edge.sourceHandle || undefined,
+      targetHandle: edge.targetHandle || undefined,
+      label: typeof edge.label === 'string' ? edge.label : undefined,
+      dataType: (edge.data?.dataType as 'prompt' | 'code' | 'report') || 'prompt',
+      animated: Boolean(edge.animated),
+    })),
+    createdAt: now,
+    updatedAt: params.document.updatedAt || now,
+  }
+}
+
+export function resolveNodeAIFallback(
+  config: NodeAIConfig | undefined,
+  globalDefaults: WorkflowGlobalDefaults
+): {
+  systemPrompt?: string
+  model?: string
+  temperature?: number
+  routing: NodeRoutingMode
+  useMemoryVault: boolean
+  memoryScope: NodeMemoryScope
+} {
+  const maybeTemp = config?.temperature ?? globalDefaults.temperature
+  const parsedTemp = typeof maybeTemp === 'number' ? maybeTemp : undefined
+  return {
+    systemPrompt: config?.systemPrompt?.trim() || globalDefaults.systemPrompt,
+    model: config?.model?.trim() || globalDefaults.model,
+    temperature:
+      typeof parsedTemp === 'number' && Number.isFinite(parsedTemp)
+        ? Math.min(1, Math.max(0.1, parsedTemp))
+        : undefined,
+    routing: config?.routing || globalDefaults.routing || 'direct',
+    useMemoryVault: config?.useMemoryVault ?? globalDefaults.useMemoryVault ?? false,
+    memoryScope: config?.memoryScope || globalDefaults.memoryScope || 'workflow',
+  }
+}

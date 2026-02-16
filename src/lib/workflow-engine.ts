@@ -85,6 +85,8 @@ export async function executeWorkflow(params: {
   const nodeResults: NodeExecutionResult[] = []
   const communications: WorkflowCommunicationEvent[] = []
   const validNodeIds = new Set(params.workflow.nodes.map((node) => node.id))
+  const nodeById = new Map(params.workflow.nodes.map((node) => [node.id, node]))
+  const globalDefaults = params.workflow.globalDefaults || {}
   const validEdges = params.workflow.edges.filter(
     (edge) => validNodeIds.has(edge.source) && validNodeIds.has(edge.target)
   )
@@ -120,6 +122,38 @@ export async function executeWorkflow(params: {
 
   const normalizeMessage = (input: string) => input.trim().slice(0, 600)
 
+  const resolveNodeRuntimeConfig = (node: WorkflowNode) => {
+    const aiConfig = node.data.aiConfig || {}
+    const resolvedTemperature = Number(
+      aiConfig.temperature ?? globalDefaults.temperature ?? params.settings.creativityTemp
+    )
+    return {
+      systemPrompt: aiConfig.systemPrompt?.trim() || node.data.prompt?.trim() || globalDefaults.systemPrompt,
+      model: aiConfig.model?.trim() || globalDefaults.model,
+      temperature: Number.isFinite(resolvedTemperature)
+        ? Math.min(1, Math.max(0.1, resolvedTemperature))
+        : Math.min(1, Math.max(0.1, params.settings.creativityTemp)),
+      routing: aiConfig.routing || globalDefaults.routing || 'direct',
+      useMemoryVault: aiConfig.useMemoryVault ?? globalDefaults.useMemoryVault ?? false,
+      memoryScope: aiConfig.memoryScope || globalDefaults.memoryScope || 'workflow',
+      code: aiConfig.code?.trim() || '',
+    }
+  }
+
+  const resolveOutgoingByRouting = (sourceNodeId: string) => {
+    const sourceNode = nodeById.get(sourceNodeId)
+    const outgoing = outgoingBySource.get(sourceNodeId) || []
+    if (!sourceNode || outgoing.length === 0) return outgoing
+    const routing = resolveNodeRuntimeConfig(sourceNode).routing
+    if (routing === 'direct') return outgoing
+
+    const preferredRole = routing === 'buffered' ? 'buffer' : 'storage'
+    const preferredEdges = outgoing.filter(
+      (edge) => nodeById.get(edge.target)?.data.role === preferredRole
+    )
+    return preferredEdges.length > 0 ? preferredEdges : outgoing
+  }
+
   const registerCommunications = (
     sourceNodeId: string,
     message: string,
@@ -142,7 +176,7 @@ export async function executeWorkflow(params: {
   }
 
   const dispatchNodeOutput = (sourceNodeId: string, message: string) => {
-    const outgoing = outgoingBySource.get(sourceNodeId) || []
+    const outgoing = resolveOutgoingByRouting(sourceNodeId)
     if (outgoing.length === 0) return
     const safeMessage = normalizeMessage(message)
     const createdAt = new Date().toISOString()
@@ -195,9 +229,13 @@ export async function executeWorkflow(params: {
     }
 
     if (node.data.role === 'manager') {
+      const runtimeConfig = resolveNodeRuntimeConfig(node)
       const childSummaries = nodeResults.map((result) => `${result.nodeId}: ${result.summary}`).join('\n')
       const managerPlan = await generateAIText({
         settings: params.settings,
+        temperature: runtimeConfig.temperature,
+        preferredModel: runtimeConfig.model,
+        extraSystemPrompt: runtimeConfig.systemPrompt,
         prompt: `Incoming request: ${params.triggerText}
 Current execution context:
 ${childSummaries || '(none)'}
@@ -206,7 +244,7 @@ Incoming channels:
 ${incomingSummary.contextText || '(none)'}
 
 Node manager prompt:
-${node.data.prompt}
+${runtimeConfig.systemPrompt || node.data.prompt || '(none)'}
 
 Return concise orchestration status.`,
       })
@@ -215,20 +253,30 @@ Return concise orchestration status.`,
         nodeId: node.id,
         role: node.data.role,
         success: true,
-        summary: managerPlan || 'Manager completed orchestration.',
+        summary:
+          managerPlan ||
+          `Manager completed orchestration (model ${runtimeConfig.model || 'default'}).`,
       })
       dispatchNodeOutput(node.id, managerPlan || 'Manager completed orchestration.')
       continue
     }
 
     if (node.data.role === 'programmer') {
+      const runtimeConfig = resolveNodeRuntimeConfig(node)
       const programmerSummary = await generateAIText({
         settings: params.settings,
+        temperature: runtimeConfig.temperature,
+        preferredModel: runtimeConfig.model,
+        extraSystemPrompt: runtimeConfig.systemPrompt,
         prompt: `You are Programmer AI.
 Task from trigger: ${params.triggerText}
-Node prompt: ${node.data.prompt}
+Node prompt: ${runtimeConfig.systemPrompt || '(none)'}
+Node notes: ${node.data.notes || '(none)'}
+Routing mode: ${runtimeConfig.routing}
 Incoming channels:
 ${incomingSummary.contextText || '(none)'}
+Node code context:
+${runtimeConfig.code || '(none)'}
 Provide a short coding execution summary.`,
       })
 
@@ -236,7 +284,9 @@ Provide a short coding execution summary.`,
         nodeId: node.id,
         role: node.data.role,
         success: true,
-        summary: programmerSummary || 'Programmer generated implementation steps.',
+        summary:
+          programmerSummary ||
+          `Programmer generated implementation steps (model ${runtimeConfig.model || 'default'}).`,
       })
       dispatchNodeOutput(node.id, programmerSummary || 'Programmer generated implementation steps.')
       continue
@@ -405,7 +455,8 @@ Provide a short coding execution summary.`,
       continue
     }
 
-    const code = node.data.codeSnippet?.content || ''
+    const runtimeConfig = resolveNodeRuntimeConfig(node)
+    const code = runtimeConfig.code || node.data.codeSnippet?.content || ''
     if (!code.trim()) {
       nodeResults.push({
         nodeId: node.id,

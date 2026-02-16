@@ -62,15 +62,40 @@ export interface StorageNodeConfig {
   schemaHint?: string
 }
 
+export type NodeMemoryScope = 'session' | 'workflow' | 'global'
+export type NodeRoutingMode = 'direct' | 'buffered' | 'storage'
+
+export interface NodeAIConfig {
+  systemPrompt?: string
+  model?: string
+  temperature?: number
+  routing?: NodeRoutingMode
+  useMemoryVault?: boolean
+  memoryScope?: NodeMemoryScope
+  code?: string
+}
+
+export interface WorkflowGlobalDefaults {
+  systemPrompt?: string
+  model?: string
+  temperature?: number
+  routing?: NodeRoutingMode
+  useMemoryVault?: boolean
+  memoryScope?: NodeMemoryScope
+}
+
 export interface WorkflowNodeData {
   label: string
   role: NodeRole
+  nodeKind?: 'box' | 'ai' | 'text' | 'buffer' | 'storage'
   workerType?: string
+  notes?: string
   prompt: string
   textContent?: string
   textStyle?: WorkflowTextStyle
   bufferConfig?: BufferNodeConfig
   storageConfig?: StorageNodeConfig
+  aiConfig?: NodeAIConfig
   capabilities?: string[]
   codeSnippet?: CodeSnippet
   testsPassed?: boolean
@@ -105,6 +130,7 @@ export interface Workflow {
   userId: string
   name: string
   description?: string
+  globalDefaults?: WorkflowGlobalDefaults
   nodes: WorkflowNode[]
   edges: WorkflowEdge[]
   createdAt: string

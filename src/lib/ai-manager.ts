@@ -31,8 +31,9 @@ async function generateWithOpenAI(params: {
   prompt: string
   temperature: number
   maxTokens: number
+  model?: string
 }) {
-  const model = process.env.OPENAI_MODEL || 'gpt-4.1-mini'
+  const model = params.model || process.env.OPENAI_MODEL || 'gpt-4.1-mini'
   const response = await fetchWithTimeout('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -66,8 +67,9 @@ async function generateWithGemini(params: {
   prompt: string
   temperature: number
   maxTokens: number
+  model?: string
 }) {
-  const model = process.env.GEMINI_MODEL || 'gemini-2.0-flash'
+  const model = params.model || process.env.GEMINI_MODEL || 'gemini-2.0-flash'
   const response = await fetchWithTimeout(
     `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(
       params.apiKey
@@ -108,17 +110,22 @@ export async function generateAIText(params: {
   prompt: string
   temperature?: number
   maxTokens?: number
+  preferredModel?: string
+  extraSystemPrompt?: string
 }) {
   const { settings, prompt } = params
   const temperature = Math.min(1, Math.max(0.2, params.temperature ?? settings.creativityTemp))
   const maxTokens = params.maxTokens ?? 1500
-  const systemPrompt = getResolvedPrompt(settings)
+  const systemPrompt = getResolvedPrompt(settings, params.extraSystemPrompt)
 
   if (settings.aiKeys.claude) {
     try {
       const anthropic = new Anthropic({ apiKey: settings.aiKeys.claude })
       const response = await anthropic.messages.create({
-        model: 'claude-sonnet-4-20250514',
+        model:
+          params.preferredModel && params.preferredModel.toLowerCase().startsWith('claude')
+            ? params.preferredModel
+            : 'claude-sonnet-4-20250514',
         max_tokens: maxTokens,
         temperature,
         system: systemPrompt,
@@ -142,6 +149,7 @@ export async function generateAIText(params: {
         prompt,
         temperature,
         maxTokens,
+        model: params.preferredModel,
       })
       if (result.trim()) return result
     } catch (error) {
@@ -157,6 +165,7 @@ export async function generateAIText(params: {
         prompt,
         temperature,
         maxTokens,
+        model: params.preferredModel,
       })
       if (result.trim()) return result
     } catch (error) {
