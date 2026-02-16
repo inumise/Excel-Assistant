@@ -102,6 +102,13 @@ export const NODE_TEMPLATES: NodeTemplateDefinition[] = [
     role: 'programmer',
   },
   {
+    id: 'function-box',
+    title: 'Function Box',
+    description: 'Code function node for local runtime logic',
+    kind: 'ai',
+    role: 'code',
+  },
+  {
     id: 'shape',
     title: 'Shape',
     description: 'Basic shape card for diagram anchors',
@@ -188,7 +195,10 @@ export function createMindMapNode(template: NodeTemplateDefinition, position: XY
         template.kind === 'ai'
           ? {
               language: 'typescript',
-              content: '',
+              content:
+                template.role === 'code'
+                  ? `export function run(input: string) {\n  return input\n}\n`
+                  : '',
             }
           : undefined,
       errorHandler: {

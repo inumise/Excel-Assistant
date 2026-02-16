@@ -32,6 +32,7 @@ export function MindMapBuilder() {
   const [activeTool, setActiveTool] = useState<MindMapTool>('select')
   const [drawColor, setDrawColor] = useState('#2563EB')
   const [drawWidth, setDrawWidth] = useState(2.5)
+  const [isCatalogDragging, setIsCatalogDragging] = useState(false)
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null)
   const [globalCollapsed, setGlobalCollapsed] = useState(true)
@@ -201,10 +202,17 @@ export function MindMapBuilder() {
     (templateId: string) => {
       const template = NODE_TEMPLATES.find((entry) => entry.id === templateId)
       if (!template) return
-      const position = flowInstance
+      const canvasElement = document.querySelector('.mind-reactflow') as HTMLElement | null
+      const canvasRect = canvasElement?.getBoundingClientRect()
+      const position = flowInstance && canvasRect
+        ? flowInstance.screenToFlowPosition({
+            x: canvasRect.left + canvasRect.width * 0.5,
+            y: canvasRect.top + canvasRect.height * 0.45,
+          })
+        : flowInstance
         ? flowInstance.screenToFlowPosition({
             x: window.innerWidth * 0.5,
-            y: window.innerHeight * 0.35,
+            y: window.innerHeight * 0.42,
           })
         : { x: 120 + Math.random() * 200, y: 120 + Math.random() * 120 }
       updateDocument(
@@ -509,7 +517,10 @@ export function MindMapBuilder() {
             </div>
           </div>
 
-          <WorkerCatalog onAddTemplate={addTemplateNodeNearCenter} />
+          <WorkerCatalog
+            onAddTemplate={addTemplateNodeNearCenter}
+            onDragStateChange={setIsCatalogDragging}
+          />
         </div>
 
         <MindMapCanvas
@@ -517,6 +528,7 @@ export function MindMapBuilder() {
           activeTool={activeTool}
           drawColor={drawColor}
           drawWidth={drawWidth}
+          externalDragActive={isCatalogDragging}
           onSelectNode={handleSelectNode}
           onSelectEdge={handleSelectEdge}
           onUpdateDocument={updateDocument}

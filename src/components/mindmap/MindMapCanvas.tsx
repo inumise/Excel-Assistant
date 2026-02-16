@@ -35,6 +35,7 @@ interface MindMapCanvasProps {
   activeTool: MindMapTool
   drawColor: string
   drawWidth: number
+  externalDragActive: boolean
   onSelectNode: (nodeId: string | null) => void
   onSelectEdge: (edgeId: string | null) => void
   onUpdateDocument: (
@@ -57,6 +58,7 @@ function MindMapCanvasInner({
   activeTool,
   drawColor,
   drawWidth,
+  externalDragActive,
   onSelectNode,
   onSelectEdge,
   onUpdateDocument,
@@ -65,6 +67,15 @@ function MindMapCanvasInner({
   const reactFlow = useReactFlow<MindMapNode, MindMapEdge>()
   const wrapperRef = useRef<HTMLDivElement>(null)
   const [activeStrokeId, setActiveStrokeId] = useState<string | null>(null)
+  const [isDropHover, setIsDropHover] = useState(false)
+
+  const getTemplateIdFromTransfer = useCallback((event: DragEvent) => {
+    const fromMindMap = event.dataTransfer.getData('application/mindmap-template')
+    const fromReactFlow = event.dataTransfer.getData('application/reactflow')
+    const fromPlain = event.dataTransfer.getData('text/plain')
+    const candidate = fromMindMap || fromReactFlow || fromPlain
+    return NODE_TEMPLATES.some((entry) => entry.id === candidate) ? candidate : ''
+  }, [])
 
   const onNodesChange = useCallback<OnNodesChange>(
     (changes: NodeChange[]) => {
@@ -146,20 +157,37 @@ function MindMapCanvasInner({
     (event: DragEvent) => {
       event.preventDefault()
       if (!wrapperRef.current) return
-      const templateId = event.dataTransfer.getData('application/mindmap-template')
+      const templateId = getTemplateIdFromTransfer(event)
       if (!templateId) return
       const position = reactFlow.screenToFlowPosition({
         x: event.clientX,
         y: event.clientY,
       })
+      setIsDropHover(false)
       addNodeAtPoint(templateId, position.x, position.y)
     },
-    [addNodeAtPoint, reactFlow]
+    [addNodeAtPoint, getTemplateIdFromTransfer, reactFlow]
   )
 
   const onDragOver = useCallback((event: DragEvent) => {
+    const templateId = getTemplateIdFromTransfer(event)
+    if (!templateId) return
     event.preventDefault()
-    event.dataTransfer.dropEffect = 'move'
+    event.dataTransfer.dropEffect = 'copy'
+    setIsDropHover(true)
+  }, [getTemplateIdFromTransfer])
+
+  const onDragEnter = useCallback((event: DragEvent) => {
+    const templateId = getTemplateIdFromTransfer(event)
+    if (!templateId) return
+    event.preventDefault()
+    setIsDropHover(true)
+  }, [getTemplateIdFromTransfer])
+
+  const onDragLeave = useCallback((event: DragEvent) => {
+    const relatedNode = event.relatedTarget as Node | null
+    if (wrapperRef.current?.contains(relatedNode)) return
+    setIsDropHover(false)
   }, [])
 
   const onPaneClick = useCallback(
@@ -322,6 +350,8 @@ function MindMapCanvasInner({
         className="absolute inset-0"
         onDrop={onDrop}
         onDragOver={onDragOver}
+        onDragEnter={onDragEnter}
+        onDragLeave={onDragLeave}
         onPointerDown={onDrawPointerDown}
         onPointerMove={onDrawPointerMove}
         onPointerUp={onDrawPointerUp}
@@ -363,6 +393,14 @@ function MindMapCanvasInner({
           <Background variant={BackgroundVariant.Dots} color="var(--mind-grid-dot)" gap={24} size={0.85} />
           <Controls showInteractive={false} />
         </ReactFlow>
+
+        {(externalDragActive || isDropHover) && (
+          <div className="pointer-events-none absolute inset-4 z-20 rounded-xl border border-dashed border-[#6f90be] bg-[#e8f0fb]/55">
+            <div className="absolute left-1/2 top-1/2 -translate-x-1/2 rounded-md border border-[#aec3df] bg-white/90 px-3 py-1.5 text-xs font-medium text-[#365172] shadow-sm">
+              Drop here to add a box
+            </div>
+          </div>
+        )}
 
         {document.strokes.length > 0 && (
           <svg
