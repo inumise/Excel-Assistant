@@ -180,6 +180,10 @@ const edgePalette: Record<EdgeDataType, string> = {
   api: '#2563EB',
   code: '#059669',
   ai: '#7C3AED',
+  prompt: '#7C3AED',
+  context: '#EA580C',
+  event: '#0F766E',
+  memory: '#1D4ED8',
 }
 
 const textFontOptions = [

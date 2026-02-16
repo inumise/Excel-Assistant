@@ -274,10 +274,11 @@ export function normalizeMindMapDocument(input?: Partial<MindMapDocument>): Mind
     nodes,
     edges: (input?.edges || []).map((rawEdge) => {
       const edge = rawEdge as MindMapEdge
+      const legacyDataType = (edge.data as { dataType?: unknown } | undefined)?.dataType
       const normalizedType = isEdgeMessageType(edge.data?.messageType)
         ? edge.data.messageType
-        : isEdgeMessageType((edge.data as { dataType?: unknown } | undefined)?.dataType)
-        ? ((edge.data as { dataType: MindMapMessageType }).dataType as MindMapMessageType)
+        : isEdgeMessageType(legacyDataType)
+        ? legacyDataType
         : 'prompt'
       return {
         ...edge,
