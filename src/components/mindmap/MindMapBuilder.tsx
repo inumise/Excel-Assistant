@@ -33,6 +33,7 @@ export function MindMapBuilder() {
   const [drawColor, setDrawColor] = useState('#2563EB')
   const [drawWidth, setDrawWidth] = useState(2.5)
   const [isCatalogDragging, setIsCatalogDragging] = useState(false)
+  const [dragTemplateId, setDragTemplateId] = useState<string | null>(null)
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null)
   const [globalCollapsed, setGlobalCollapsed] = useState(true)
@@ -202,7 +203,7 @@ export function MindMapBuilder() {
     (templateId: string) => {
       const template = NODE_TEMPLATES.find((entry) => entry.id === templateId)
       if (!template) return
-      const canvasElement = document.querySelector('.mind-reactflow') as HTMLElement | null
+      const canvasElement = window.document.querySelector('.mind-reactflow') as HTMLElement | null
       const canvasRect = canvasElement?.getBoundingClientRect()
       const position = flowInstance && canvasRect
         ? flowInstance.screenToFlowPosition({
@@ -441,6 +442,11 @@ export function MindMapBuilder() {
     flowInstance?.fitView({ padding: 0.25, duration: 300 })
   }, [flowInstance])
 
+  const clearCatalogDragState = useCallback(() => {
+    setIsCatalogDragging(false)
+    setDragTemplateId(null)
+  }, [])
+
   return (
     <main className="mx-auto flex w-full max-w-[1700px] flex-col gap-3 px-3 py-3 sm:px-4 sm:py-4">
       <header className="mind-surface-panel flex flex-wrap items-center justify-between gap-3 rounded-xl px-4 py-3">
@@ -520,6 +526,7 @@ export function MindMapBuilder() {
           <WorkerCatalog
             onAddTemplate={addTemplateNodeNearCenter}
             onDragStateChange={setIsCatalogDragging}
+            onDragTemplateChange={setDragTemplateId}
           />
         </div>
 
@@ -529,6 +536,8 @@ export function MindMapBuilder() {
           drawColor={drawColor}
           drawWidth={drawWidth}
           externalDragActive={isCatalogDragging}
+          externalDragTemplateId={dragTemplateId}
+          onExternalDropComplete={clearCatalogDragState}
           onSelectNode={handleSelectNode}
           onSelectEdge={handleSelectEdge}
           onUpdateDocument={updateDocument}

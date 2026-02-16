@@ -36,6 +36,8 @@ interface MindMapCanvasProps {
   drawColor: string
   drawWidth: number
   externalDragActive: boolean
+  externalDragTemplateId: string | null
+  onExternalDropComplete: () => void
   onSelectNode: (nodeId: string | null) => void
   onSelectEdge: (edgeId: string | null) => void
   onUpdateDocument: (
@@ -59,6 +61,8 @@ function MindMapCanvasInner({
   drawColor,
   drawWidth,
   externalDragActive,
+  externalDragTemplateId,
+  onExternalDropComplete,
   onSelectNode,
   onSelectEdge,
   onUpdateDocument,
@@ -66,6 +70,7 @@ function MindMapCanvasInner({
 }: MindMapCanvasProps) {
   const reactFlow = useReactFlow<MindMapNode, MindMapEdge>()
   const wrapperRef = useRef<HTMLDivElement>(null)
+  const dropHandledRef = useRef(false)
   const [activeStrokeId, setActiveStrokeId] = useState<string | null>(null)
   const [isDropHover, setIsDropHover] = useState(false)
 
@@ -157,16 +162,18 @@ function MindMapCanvasInner({
     (event: DragEvent) => {
       event.preventDefault()
       if (!wrapperRef.current) return
-      const templateId = getTemplateIdFromTransfer(event)
+      const templateId = getTemplateIdFromTransfer(event) || externalDragTemplateId || ''
       if (!templateId) return
       const position = reactFlow.screenToFlowPosition({
         x: event.clientX,
         y: event.clientY,
       })
       setIsDropHover(false)
+      dropHandledRef.current = true
       addNodeAtPoint(templateId, position.x, position.y)
+      onExternalDropComplete()
     },
-    [addNodeAtPoint, getTemplateIdFromTransfer, reactFlow]
+    [addNodeAtPoint, externalDragTemplateId, getTemplateIdFromTransfer, onExternalDropComplete, reactFlow]
   )
 
   const onDragOver = useCallback((event: DragEvent) => {
@@ -308,9 +315,26 @@ function MindMapCanvasInner({
     [activeTool, eraseAtPoint, toFlowPoint, writeStrokePoint]
   )
 
-  const onDrawPointerUp = useCallback(() => {
-    setActiveStrokeId(null)
-  }, [])
+  const onDrawPointerUp = useCallback(
+    (event: PointerEvent) => {
+    if (dropHandledRef.current) {
+      dropHandledRef.current = false
+      setActiveStrokeId(null)
+      return
+    }
+      if (externalDragActive && externalDragTemplateId && isDropHover) {
+        const position = reactFlow.screenToFlowPosition({
+          x: event.clientX,
+          y: event.clientY,
+        })
+        addNodeAtPoint(externalDragTemplateId, position.x, position.y)
+        setIsDropHover(false)
+        onExternalDropComplete()
+      }
+      setActiveStrokeId(null)
+    },
+    [addNodeAtPoint, externalDragActive, externalDragTemplateId, isDropHover, onExternalDropComplete, reactFlow]
+  )
 
   const strokesSvg = useMemo(
     () =>
@@ -352,10 +376,16 @@ function MindMapCanvasInner({
         onDragOver={onDragOver}
         onDragEnter={onDragEnter}
         onDragLeave={onDragLeave}
+        onPointerEnter={() => {
+          if (externalDragActive) setIsDropHover(true)
+        }}
         onPointerDown={onDrawPointerDown}
         onPointerMove={onDrawPointerMove}
         onPointerUp={onDrawPointerUp}
-        onPointerLeave={onDrawPointerUp}
+        onPointerLeave={(event) => {
+          setIsDropHover(false)
+          onDrawPointerUp(event)
+        }}
       >
         <div className="mind-wave-layer" aria-hidden>
           <div className="mind-wave-band mind-wave-band--blue" />

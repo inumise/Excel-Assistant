@@ -6,6 +6,7 @@ import { NODE_TEMPLATES } from '@/components/mindmap/types'
 interface WorkerCatalogProps {
   onAddTemplate: (templateId: string) => void
   onDragStateChange?: (active: boolean) => void
+  onDragTemplateChange?: (templateId: string | null) => void
 }
 
 function templateIcon(templateId: string) {
@@ -18,7 +19,11 @@ function templateIcon(templateId: string) {
   return <Square className="h-4 w-4 text-slate-600" />
 }
 
-export function WorkerCatalog({ onAddTemplate, onDragStateChange }: WorkerCatalogProps) {
+export function WorkerCatalog({
+  onAddTemplate,
+  onDragStateChange,
+  onDragTemplateChange,
+}: WorkerCatalogProps) {
   return (
     <aside className="mind-surface-panel w-full rounded-xl p-3">
       <h2 className="text-sm font-semibold text-slate-900">Node Catalog</h2>
@@ -33,14 +38,26 @@ export function WorkerCatalog({ onAddTemplate, onDragStateChange }: WorkerCatalo
             type="button"
             draggable
             data-testid={`catalog-${template.id}`}
+            onMouseDown={() => {
+              onDragStateChange?.(true)
+              onDragTemplateChange?.(template.id)
+            }}
+            onMouseUp={() => {
+              onDragStateChange?.(false)
+              onDragTemplateChange?.(null)
+            }}
             onDragStart={(event) => {
               event.dataTransfer.setData('application/mindmap-template', template.id)
               event.dataTransfer.setData('application/reactflow', template.id)
               event.dataTransfer.setData('text/plain', template.id)
               event.dataTransfer.effectAllowed = 'move'
               onDragStateChange?.(true)
+              onDragTemplateChange?.(template.id)
             }}
-            onDragEnd={() => onDragStateChange?.(false)}
+            onDragEnd={() => {
+              onDragStateChange?.(false)
+              onDragTemplateChange?.(null)
+            }}
             onClick={() => onAddTemplate(template.id)}
             className="flex w-full items-start gap-2 rounded-lg border border-slate-200 bg-slate-50 px-2 py-2 text-left transition hover:border-slate-300 hover:bg-white"
           >
