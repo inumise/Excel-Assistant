@@ -424,25 +424,24 @@ export function buildWorkforceBlueprint(params: { blueprintId: BlueprintId; orig
     nodeByKey.set(spec.key, node)
   }
 
-  const edges: MindMapEdge[] = blueprint.edges
-    .map((edgeSpec) => {
-      const sourceNode = nodeByKey.get(edgeSpec.from)
-      const targetNode = nodeByKey.get(edgeSpec.to)
-      if (!sourceNode || !targetNode) return null
-      return {
-        id: `edge-${sourceNode.id}-${targetNode.id}`,
-        source: sourceNode.id,
-        target: targetNode.id,
-        type: 'default',
-        label: edgeSpec.messageType,
-        animated: false,
-        data: {
-          messageType: edgeSpec.messageType,
-          channel: edgeSpec.channel || 'default',
-        },
-      } satisfies MindMapEdge
+  const edges: MindMapEdge[] = []
+  for (const edgeSpec of blueprint.edges) {
+    const sourceNode = nodeByKey.get(edgeSpec.from)
+    const targetNode = nodeByKey.get(edgeSpec.to)
+    if (!sourceNode || !targetNode) continue
+    edges.push({
+      id: `edge-${sourceNode.id}-${targetNode.id}`,
+      source: sourceNode.id,
+      target: targetNode.id,
+      type: 'default',
+      label: edgeSpec.messageType,
+      animated: false,
+      data: {
+        messageType: edgeSpec.messageType,
+        channel: edgeSpec.channel || 'default',
+      },
     })
-    .filter((edge): edge is MindMapEdge => Boolean(edge))
+  }
 
   return {
     blueprint,
