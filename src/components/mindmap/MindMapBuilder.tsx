@@ -353,8 +353,11 @@ export function MindMapBuilder() {
   }, [])
 
   useEffect(() => {
-    void runValidation()
-  }, [runValidation])
+    const timeout = window.setTimeout(() => {
+      void runValidation()
+    }, 350)
+    return () => window.clearTimeout(timeout)
+  }, [document, runValidation])
 
   useEffect(() => {
     void refreshReliability()
